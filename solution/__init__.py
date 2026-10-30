@@ -15,6 +15,7 @@ The rules in short (the README and the task statement have the full ones):
 
 from .swiglu import patch_qwen2_mlp
 from .vocab import patch_vocab_reductions
+from .nf4 import patch_nf4_dequantization
 
 _applied = False
 
@@ -25,4 +26,5 @@ def apply():
         return
     patch_qwen2_mlp()  # the example: works out of the box, does not count as your own kernel
     patch_vocab_reductions()
+    patch_nf4_dequantization()
     _applied = True
