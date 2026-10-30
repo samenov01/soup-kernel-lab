@@ -1,11 +1,14 @@
 # Submission: stariy bog
 
-Статус: кандидат в ветке `kernel-optimization`; финальные измерения и допуск отсутствуют.
+Статус: экспериментальный кандидат в личном репозитории; финальные измерения и допуск отсутствуют.
 
 ## Ссылки
 
 - Репозиторий: https://github.com/BAITC-Hacks/hack-8db9951c-stariy-bog
-- Ветка кандидата: https://github.com/BAITC-Hacks/hack-8db9951c-stariy-bog/tree/kernel-optimization
+- Репозиторий разработки: https://github.com/samenov01/soup-kernel-lab
+- Ветка кандидата: https://github.com/samenov01/soup-kernel-lab/tree/main
+- Репозиторий команды восстановлен до исходного README. Для сдачи проверенный код
+  нужно отдельно перенести туда; личный репозиторий не заменяет конкурсный.
 - Финальный коммит для сдачи: будет выбран после измерений и проверки допуска.
 - Kaggle: https://www.kaggle.com/code/diassamenov/notebookbbefaa73fb
   Это предоставленный ноутбук исходного запуска; сохранённая версия с новым
