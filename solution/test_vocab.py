@@ -75,6 +75,36 @@ def test_entropy(shape):
     torch.testing.assert_close(x, before, atol=0, rtol=0)
 
 
+@pytest.mark.parametrize("offset", [1e6, -1e6, 1e8])
+def test_ce_backward_large_common_offset(offset):
+    # Softmax is invariant under a common offset. Storing max+logsum in one
+    # float loses this property (about 1.1% probability error at offset=1e6).
+    x = torch.full((2, 8193), offset, device="cuda", requires_grad=True)
+    labels = torch.tensor([0, 8192], device="cuda")
+    ref = F.cross_entropy(x, labels, reduction="none")
+    got = token_cross_entropy(x, labels)
+    dr, = torch.autograd.grad(ref.sum(), x)
+    dg, = torch.autograd.grad(got.sum(), x)
+    torch.testing.assert_close(got, ref, atol=3e-5, rtol=3e-6)
+    torch.testing.assert_close(dg, dr, atol=1e-8, rtol=3e-5)
+
+
+@pytest.mark.parametrize("ignored_tile", [0, 1])
+@pytest.mark.parametrize("ignore_index", [-100, 3])
+def test_ce_fully_masked_vocabulary_tile(ignored_tile, ignore_index):
+    x = torch.zeros(2, 8192, device="cuda")
+    x[:, ignored_tile * 4096:(ignored_tile + 1) * 4096] = -torch.inf
+    x.requires_grad_()
+    labels = torch.tensor([(1 - ignored_tile) * 4096, ignore_index], device="cuda")
+    expected = F.cross_entropy(x, labels, reduction="none", ignore_index=ignore_index)
+    actual = token_cross_entropy(x, labels, ignore_index=ignore_index)
+    dr, = torch.autograd.grad(expected.sum(), x)
+    dg, = torch.autograd.grad(actual.sum(), x)
+    torch.testing.assert_close(actual, expected, atol=3e-5, rtol=3e-6)
+    torch.testing.assert_close(dg, dr, atol=1e-8, rtol=3e-5)
+    assert torch.isfinite(actual).all() and torch.isfinite(dg).all()
+
+
 def test_patched_call_sites_and_fallbacks():
     from transformers.loss import loss_utils
     from trl.trainer import sft_trainer

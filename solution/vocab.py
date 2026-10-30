@@ -21,6 +21,10 @@ def vocab_partial_kernel(X, M, S, W, V: tl.constexpr, STRIDE: tl.constexpr,
     x = tl.load(X + row * STRIDE + col, col < V, other=-float("inf"))
     maximum = tl.max(x, 0)
     delta = x - maximum
+    if not ENTROPY:
+        # A whole tile of masked classes contributes zero, not exp(-inf - -inf).
+        # Keep entropy's original log_softmax semantics for non-finite logits.
+        delta = tl.where(maximum == -float("inf"), -float("inf"), delta)
     p = tl.exp(delta)
     slot = row * PARTS + part
     tl.store(M + slot, maximum)
@@ -32,7 +36,7 @@ def vocab_partial_kernel(X, M, S, W, V: tl.constexpr, STRIDE: tl.constexpr,
 
 
 @triton.jit
-def vocab_ce_finish_kernel(X, Y, M, S, LSE, LOSS, V: tl.constexpr,
+def vocab_ce_finish_kernel(X, Y, M, S, NORM, LOSS, V: tl.constexpr,
                            STRIDE: tl.constexpr, PARTS: tl.constexpr,
                            IGNORE: tl.constexpr, BLOCK: tl.constexpr):
     row = tl.program_id(0)
@@ -45,21 +49,25 @@ def vocab_ce_finish_kernel(X, Y, M, S, LSE, LOSS, V: tl.constexpr,
     valid = label != IGNORE
     tl.device_assert((~valid) | ((label >= 0) & (label < V)), "target out of bounds")
     target = tl.load(X + row * STRIDE + label, valid & (label >= 0) & (label < V), other=0.0)
-    tl.store(LSE + row, maximum + log_sum)
+    # Do not round maximum + log_sum into one fp32 number: a large common
+    # offset would destroy the small normalization term used by backward.
+    tl.store(NORM + 2 * row, maximum)
+    tl.store(NORM + 2 * row + 1, log_sum)
     tl.store(LOSS + row, tl.where(valid, (maximum - target) + log_sum, 0.0))
 
 
 @triton.jit
-def vocab_ce_backward_kernel(X, Y, LSE, DLOSS, DX, V: tl.constexpr,
+def vocab_ce_backward_kernel(X, Y, NORM, DLOSS, DX, V: tl.constexpr,
                              STRIDE: tl.constexpr, IGNORE: tl.constexpr,
                              BLOCK: tl.constexpr):
     row = tl.program_id(0)
     col = tl.program_id(1) * BLOCK + tl.arange(0, BLOCK)
     label = tl.load(Y + row)
     x = tl.load(X + row * STRIDE + col, col < V, other=-float("inf"))
-    lse = tl.load(LSE + row)
+    maximum = tl.load(NORM + 2 * row)
+    log_sum = tl.load(NORM + 2 * row + 1)
     upstream = tl.load(DLOSS + row)
-    grad = (tl.exp(x - lse) - (col == label).to(tl.float32)) * upstream
+    grad = (tl.exp((x - maximum) - log_sum) - (col == label).to(tl.float32)) * upstream
     tl.store(DX + row * V + col, tl.where(label != IGNORE, grad, 0.0), col < V)
 
 
@@ -96,24 +104,24 @@ class _TokenCrossEntropy(torch.autograd.Function):
     def forward(ctx, x, labels, ignore_index):
         labels = labels.contiguous()
         maxima, sums, _, parts = _partials(x)
-        lse = torch.empty(x.shape[0], device=x.device, dtype=torch.float32)
-        loss = torch.empty_like(lse)
+        norm = torch.empty((x.shape[0], 2), device=x.device, dtype=torch.float32)
+        loss = torch.empty(x.shape[0], device=x.device, dtype=torch.float32)
         vocab_ce_finish_kernel[(x.shape[0],)](
-            x, labels, maxima, sums, lse, loss, x.shape[1], x.stride(0),
+            x, labels, maxima, sums, norm, loss, x.shape[1], x.stride(0),
             parts, ignore_index, triton.next_power_of_2(parts), num_warps=4,
             debug=True,
         )
-        ctx.save_for_backward(x, labels, lse)
+        ctx.save_for_backward(x, labels, norm)
         ctx.ignore_index = ignore_index
         return loss
 
     @staticmethod
     @once_differentiable
     def backward(ctx, grad):
-        x, labels, lse = ctx.saved_tensors
+        x, labels, norm = ctx.saved_tensors
         dx = torch.empty(x.shape, device=x.device, dtype=x.dtype)
         vocab_ce_backward_kernel[(x.shape[0], triton.cdiv(x.shape[1], TILE))](
-            x, labels, lse, grad.contiguous(), dx, x.shape[1], x.stride(0),
+            x, labels, norm, grad.contiguous(), dx, x.shape[1], x.stride(0),
             ctx.ignore_index, TILE, num_warps=4,
         )
         return dx, None, None
@@ -190,9 +198,11 @@ def patch_vocab_reductions():
                 losses = token_cross_entropy(logits[row, :-1].detach(), target)
                 mask = target != -100
                 count = mask.sum()
-                means.append(float((losses * mask).sum() / count.clamp(min=1)))
-                counts.append(int(count))
-        return means, counts
+                means.append((losses * mask).sum() / count.clamp(min=1))
+                counts.append(count)
+            # Preserve float32 row reduction and integer counts, but transfer
+            # whole lists rather than synchronizing twice for each example.
+            return torch.stack(means).tolist(), torch.stack(counts).tolist()
 
     fixed_ce._soup_vocab_patch = True
     loss_utils.fixed_cross_entropy = fixed_ce
