@@ -4,7 +4,7 @@ from contextvars import ContextVar
 from copy import copy
 import torch
 from torch.autograd.function import once_differentiable
-from .merged_gate_up import _scales, _signature
+from .merged_gate_up import _scales, _signature, share_packed_storage
 from .padded_mlp import _TOKENS
 
 _BASE = ContextVar("soup_precomputed_base_qkv", default=None)
@@ -85,6 +85,9 @@ def patch_merged_qkv():
                 bias = torch.cat([p.bias.half() if p.bias is not None else
                     torch.zeros(n, device=hidden_states.device, dtype=torch.float16)
                     for p, n in zip(layers, sizes)])
+            share_packed_storage([p.weight for p in layers], packed)
+            signature = tuple((_signature(p.weight), None if p.bias is None else
+                               (p.bias.data_ptr(), p.bias._version)) for p in layers)
             cached = (signature, packed, state, bias, sizes)
             self._soup_merged_qkv_cache = cached
         tokens = _TOKENS.get()

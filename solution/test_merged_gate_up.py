@@ -38,6 +38,8 @@ def test_merged_frozen_gate_up(width, intermediate, rows):
             merged_gate_up(module, x)
         assert module._soup_merged_gate_up[1] is packed
         assert packed.dtype == torch.uint8
+        assert all(layer.weight.untyped_storage().data_ptr() == packed.untyped_storage().data_ptr()
+                   for layer in layers)
         for layer, old in zip(layers, before):
             assert torch.equal(layer.weight, old)
     finally:

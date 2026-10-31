@@ -27,6 +27,7 @@ from .merged_qkv import patch_merged_qkv
 from .compact_lora import patch_compact_lora
 from .half_activations import patch_half_activations
 from .unpadded_sdpa import patch_unpadded_sdpa
+from .nf4_backward import patch_nf4_backward
 
 _applied = False
 
@@ -49,4 +50,5 @@ def apply():
     patch_compact_lora()
     patch_half_activations()
     patch_unpadded_sdpa()
+    patch_nf4_backward()
     _applied = True

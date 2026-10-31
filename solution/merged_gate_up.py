@@ -46,6 +46,20 @@ def _signature(weight):
             tuple((t.data_ptr(), t._version) for t in tensors))
 
 
+def share_packed_storage(weights, packed):
+    """Give frozen original parameters views of their unchanged packed bytes.
+
+    Parameters and quantization metadata remain intact. This avoids retaining
+    both the original packed weights and a second concatenated copy per layer.
+    """
+    offset = 0
+    with torch.no_grad():
+        for weight in weights:
+            size = weight.numel()
+            weight.data = packed[offset:offset + size].view_as(weight)
+            offset += size
+
+
 def merged_gate_up(module, x):
     from bitsandbytes.functional import QuantState
     gate, up = module.gate_proj.weight, module.up_proj.weight
@@ -64,6 +78,8 @@ def merged_gate_up(module, x):
         scales = torch.cat((_scales(a), _scales(b)))
         state = QuantState(scales, shape=torch.Size((2 * a.shape[0], a.shape[1])),
                            code=a.code, blocksize=a.blocksize, quant_type="nf4", dtype=torch.float32)
+        share_packed_storage((gate, up), packed)
+        signature = (_signature(gate), _signature(up))
         cached = (signature, packed, state)
         module._soup_merged_gate_up = cached
     merged = _GateUp.apply(x, cached[1], cached[2])

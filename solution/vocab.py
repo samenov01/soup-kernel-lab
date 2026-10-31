@@ -18,7 +18,7 @@ def vocab_partial_kernel(X, M, S, W, V: tl.constexpr, STRIDE: tl.constexpr,
                          BLOCK: tl.constexpr):
     row, part = tl.program_id(0), tl.program_id(1)
     col = part * BLOCK + tl.arange(0, BLOCK)
-    x = tl.load(X + row * STRIDE + col, col < V, other=-float("inf"))
+    x = tl.load(X + row * STRIDE + col, col < V, other=-float("inf")).to(tl.float32)
     maximum = tl.max(x, 0)
     delta = x - maximum
     if not ENTROPY:
@@ -48,7 +48,7 @@ def vocab_ce_finish_kernel(X, Y, M, S, NORM, LOSS, V: tl.constexpr,
     label = tl.load(Y + row)
     valid = label != IGNORE
     tl.device_assert((~valid) | ((label >= 0) & (label < V)), "target out of bounds")
-    target = tl.load(X + row * STRIDE + label, valid & (label >= 0) & (label < V), other=0.0)
+    target = tl.load(X + row * STRIDE + label, valid & (label >= 0) & (label < V), other=0.0).to(tl.float32)
     # Do not round maximum + log_sum into one fp32 number: a large common
     # offset would destroy the small normalization term used by backward.
     tl.store(NORM + 2 * row, maximum)
@@ -63,7 +63,7 @@ def vocab_ce_backward_kernel(X, Y, NORM, DLOSS, DX, V: tl.constexpr,
     row = tl.program_id(0)
     col = tl.program_id(1) * BLOCK + tl.arange(0, BLOCK)
     label = tl.load(Y + row)
-    x = tl.load(X + row * STRIDE + col, col < V, other=-float("inf"))
+    x = tl.load(X + row * STRIDE + col, col < V, other=-float("inf")).to(tl.float32)
     maximum = tl.load(NORM + 2 * row)
     log_sum = tl.load(NORM + 2 * row + 1)
     upstream = tl.load(DLOSS + row * DLOSS_STRIDE)

@@ -2,6 +2,7 @@
 
 import torch
 import torch.nn.functional as F
+from .varlen_attention import varlen_attention
 from .chunked_head import _ACTIVE
 from .padded_mlp import _TOKENS
 
@@ -45,22 +46,7 @@ def patch_unpadded_sdpa():
         if cached[1] is None:
             return original(module, query, key, value, attention_mask,
                             dropout=dropout, scaling=scaling, **kwargs)
-        batch, heads, length, dim = query.shape
-        groups = heads // key.shape[1]
-        output = torch.zeros((batch, length, heads, dim), device=query.device, dtype=torch.float16)
-        for i, (start, end) in enumerate(cached[1]):
-            q = query[i:i + 1, :, start:end]
-            k = key[i:i + 1, :, start:end]
-            v = value[i:i + 1, :, start:end]
-            if groups > 1:
-                # Explicit repetition keeps T4's memory-efficient SDPA path;
-                # enable_gqa can otherwise select the math backend on sm75.
-                k = k[:, :, None].expand(1, key.shape[1], groups, end - start, dim).reshape(1, heads, end - start, dim)
-                v = v[:, :, None].expand(1, value.shape[1], groups, end - start, dim).reshape(1, heads, end - start, dim)
-            part = F.scaled_dot_product_attention(q, k, v, dropout_p=0., is_causal=True,
-                                                  scale=dim ** -0.5 if scaling is None else scaling)
-            output[i:i + 1, start:end] = part.transpose(1, 2)
-        return output, None
-
+        return varlen_attention(query, key, value, frame, cached[1],
+                                query.shape[-1] ** -0.5 if scaling is None else scaling), None
     attention._soup_unpadded_sdpa = True
     ALL_ATTENTION_FUNCTIONS["sdpa"] = attention

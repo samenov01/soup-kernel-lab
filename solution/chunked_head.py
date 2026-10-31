@@ -51,7 +51,7 @@ class _ChunkedHeadLoss(torch.autograd.Function):
         with torch.cuda.device(hidden.device):
             for start in range(0, rows, CHUNK):
                 end = min(start + CHUNK, rows)
-                logits = F.linear(xhalf[start:end], whalf).float()
+                logits = F.linear(xhalf[start:end], whalf)
                 maxima, sums, moments, parts = _partials(logits, entropy=True)
                 vocab_ce_finish_kernel[(end - start,)](
                     logits, target[start:end], maxima, sums, norm[start:end], losses[start:end],
@@ -95,7 +95,7 @@ class _ChunkedHeadLoss(torch.autograd.Function):
         with torch.cuda.device(xhalf.device):
             for start in range(0, rows, CHUNK):
                 end = min(start + CHUNK, rows)
-                logits = F.linear(xhalf[start:end], whalf).float()
+                logits = F.linear(xhalf[start:end], whalf)
                 dlogits = torch.empty((end - start, vocab), device=xhalf.device, dtype=torch.float16)
                 vocab_ce_backward_kernel[(end - start, triton.cdiv(vocab, TILE))](
                     logits, target[start:end], norm[start:end], scale, dlogits,

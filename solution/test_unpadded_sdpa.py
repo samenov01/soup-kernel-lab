@@ -32,7 +32,8 @@ def test_native_unpadded_causal_sdpa(side, dtype, monkeypatch):
     dr = torch.autograd.grad(reference, (q, k, v), grad)
     token = _ACTIVE.set(SimpleNamespace(attention_mask=mask))
     tok = _TOKENS.set((mask.flatten().nonzero().flatten(), mask.shape))
-    native = F.scaled_dot_product_attention
+    from solution import varlen_attention as varlen
+    native = varlen._native_forward
     calls = []
 
     def record(query, *args, **kwargs):
@@ -40,7 +41,7 @@ def test_native_unpadded_causal_sdpa(side, dtype, monkeypatch):
         return native(query, *args, **kwargs)
 
     try:
-        monkeypatch.setattr(F, "scaled_dot_product_attention", record)
+        monkeypatch.setattr(varlen, "_native_forward", record)
         patch_unpadded_sdpa()
         with torch.autocast("cuda", dtype=torch.float16):
             actual, _ = ALL_ATTENTION_FUNCTIONS["sdpa"](module, q, k, v, allowed, scaling=128 ** -0.5)
@@ -50,7 +51,7 @@ def test_native_unpadded_causal_sdpa(side, dtype, monkeypatch):
         for a, b in zip(dg, dr):
             torch.testing.assert_close(a.float() / 65536, b.float() / 65536, atol=3e-5, rtol=5e-3)
             assert torch.isfinite(a).all()
-        assert len(calls) == 2 and all(shape[0] == 1 for shape in calls)
+        assert len(calls) == 1 and calls[0] == (1, 194, 12, 128)
     finally:
         ALL_ATTENTION_FUNCTIONS["sdpa"] = original
         _ACTIVE.reset(token)
