@@ -1,0 +1,12 @@
+PASS  1. every base and solution run finished                                            1 base and 1 solution runs of 1 each
+PASS  2. no ready-made kernel libraries                                                  loaded: none; imported in solution/: none; packages changed during the run: none
+PASS  3. own @triton.jit kernels in solution/ run in training                            causal_gqa_delta_kernel (solution/attention.py), causal_gqa_forward_kernel (solution/attention.py), causal_gqa_key_value_gradient_kernel (solution/attention.py), causal_gqa_query_gradient_kernel (solution/attention.py), nf4_unpack_scale_kernel (solution/nf4.py), rmsnorm_backward_kernel (solution/rmsnorm.py), rmsnorm_forward_kernel (solution/rmsnorm.py), rope_transform_kernel (solution/rope.py), vocab_ce_backward_kernel (solution/vocab.py), vocab_ce_finish_kernel (solution/vocab.py), vocab_entropy_finish_kernel (solution/vocab.py), vocab_partial_kernel (solution/vocab.py); the example's kernels do not count, under any name: example_swiglu_fwd_kernel, example_swiglu_bwd_kernel
+PASS  4. own kernels together take >= 5% of the training time                            63.9% of the training time (lowest of 1 runs, steps 3+)
+PASS  5. same task and Soup outputs (steps, adapter, settings, tokens, metrics, rewind)  identical within tolerance
+PASS  6. loss curve follows the base                                                     solution_1: first step 0.01%, mean of all steps 0.01% (max 1% and 3%)
+PASS  7. quality: eval loss at most 0.5% above the base                                  +0.000%
+FAIL  8. not worse than the base on time or memory (10% margin)                          time x1.235, memory x0.471 of the base
+PASS  9. clean measurement (a T4, idle GPUs, one GPU, harness allocator, peaks agree)    clean
+PASS  10. Soup regression tests with your patches                                        79 passed, 14 warnings in 0.34s
+
+SOME CHECKS FAILED
