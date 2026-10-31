@@ -7,6 +7,8 @@ No external attention implementation or generated attention kernel is used.
 
 import torch
 from torch.autograd.function import once_differentiable
+from .attention_io import pack_attention
+from .projection_io import _scatter
 
 
 def _native_forward(q, k, v, cumulative, maximum, scale):
@@ -21,30 +23,26 @@ def _repeat(x, groups):
 
 class _VarlenAttention(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, q, k, v, indices, cumulative, maximum, scale):
+    def forward(ctx, q, k, v, indices, inverse, cumulative, maximum, scale):
         batch, heads, length, dim = q.shape
         kvheads = k.shape[1]
-        def gather(x):
-            return x.transpose(1, 2).reshape(batch * length, -1).index_select(0, indices).half().view(1, -1, x.shape[1], dim)
-        qp, kp, vp = gather(q), gather(k), gather(v)
+        qp, kp, vp = (pack_attention(x, indices) for x in (q, k, v))
         groups = heads // kvheads
         out, lse, seed, offset, mq, mk = _native_forward(qp, _repeat(kp, groups), _repeat(vp, groups),
                                                        cumulative, maximum, scale)
-        ctx.save_for_backward(qp, kp, vp, out, lse, seed, offset, indices, cumulative)
+        ctx.save_for_backward(qp, kp, vp, out, lse, seed, offset, indices, inverse, cumulative)
         ctx.shape = q.shape
         ctx.dtypes = (q.dtype, k.dtype, v.dtype)
         ctx.maximum, ctx.scale = (mq, mk), scale
-        full = out.new_zeros((batch * length, heads, dim))
-        full.index_copy_(0, indices, out[0])
-        return full.view(batch, length, heads, dim)
+        return _scatter(out.view(-1, heads * dim), inverse, (batch, length, heads, dim), out.dtype)
 
     @staticmethod
     @once_differentiable
     def backward(ctx, grad):
-        q, k, v, out, lse, seed, offset, indices, cumulative = ctx.saved_tensors
+        q, k, v, out, lse, seed, offset, indices, inverse, cumulative = ctx.saved_tensors
         batch, heads, length, dim = ctx.shape
         groups = heads // k.shape[2]
-        dy = grad.reshape(batch * length, heads * dim).index_select(0, indices).half().view_as(out)
+        dy = pack_attention(grad.transpose(1, 2), indices)
         dq, dk, dv, _ = torch.ops.aten._efficient_attention_backward(
             dy, q, _repeat(k, groups), _repeat(v, groups), None, out,
             cumulative, cumulative, *ctx.maximum, lse, 0., seed, offset, 1, False,
@@ -53,11 +51,10 @@ class _VarlenAttention(torch.autograd.Function):
             dk = dk.view(1, -1, k.shape[2], groups, dim).sum(3, dtype=ctx.dtypes[1])
             dv = dv.view(1, -1, v.shape[2], groups, dim).sum(3, dtype=ctx.dtypes[2])
         def scatter(x, dtype):
-            full = torch.zeros((batch * length, x.shape[2], dim), device=x.device, dtype=dtype)
-            full.index_copy_(0, indices, x[0].to(dtype))
-            return full.view(batch, length, x.shape[2], dim).transpose(1, 2)
+            shape = (batch, length, x.shape[2], dim)
+            return _scatter(x.reshape(-1, x.shape[2] * dim), inverse, shape, dtype).transpose(1, 2)
         return (scatter(dq, ctx.dtypes[0]), scatter(dk, ctx.dtypes[1]), scatter(dv, ctx.dtypes[2]),
-                None, None, None, None)
+                None, None, None, None, None)
 
 
 def varlen_attention(q, k, v, frame, ranges, scale):
@@ -68,7 +65,9 @@ def varlen_attention(q, k, v, frame, ranges, scale):
         for n in lengths:
             offsets.append(offsets[-1] + n)
         indices = frame.attention_mask.reshape(-1).nonzero(as_tuple=False).flatten()
+        inverse = torch.full((frame.attention_mask.numel(),), -1, device=q.device, dtype=torch.long)
+        inverse.index_copy_(0, indices, torch.arange(indices.numel(), device=q.device))
         cumulative = torch.tensor(offsets, device=q.device, dtype=torch.int32)
-        cached = (indices, cumulative, max(lengths))
+        cached = (indices, inverse, cumulative, max(lengths))
         frame._soup_varlen_layout = cached
     return _VarlenAttention.apply(q, k, v, *cached, scale)

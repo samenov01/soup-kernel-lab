@@ -51,7 +51,9 @@ class _RecomputedMLP(torch.autograd.Function):
         dgate, dup = torch.empty_like(gate), torch.empty_like(up)
         example_swiglu_bwd_kernel[(triton.cdiv(gate.numel(), BLOCK),)](
             da.contiguous(), gate, up, dgate, dup, gate.numel(), BLOCK=BLOCK)
+        del da, gate, up
         combined = torch.cat((dgate, dup), -1)
+        del dgate, dup
         dx = torch.matmul(combined, _decode(packed, state))
         return dx, None, None, None, None
 

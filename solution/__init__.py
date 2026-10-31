@@ -29,6 +29,7 @@ from .half_activations import patch_half_activations
 from .unpadded_sdpa import patch_unpadded_sdpa
 from .nf4_backward import patch_nf4_backward
 from .recomputed_mlp import patch_recomputed_mlp
+from .nf4_scales import patch_nf4_scales
 
 _applied = False
 
@@ -53,4 +54,5 @@ def apply():
     patch_unpadded_sdpa()
     patch_nf4_backward()
     patch_recomputed_mlp()
+    patch_nf4_scales()
     _applied = True
