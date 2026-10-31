@@ -6,6 +6,8 @@ import torch
 from torch.autograd.function import once_differentiable
 from .merged_gate_up import _scales, _signature, share_packed_storage
 from .padded_mlp import _TOKENS
+from .chunked_head import _ACTIVE
+from .qkv_io import _FullQKV
 
 _BASE = ContextVar("soup_precomputed_base_qkv", default=None)
 
@@ -93,11 +95,17 @@ def patch_merged_qkv():
         tokens = _TOKENS.get()
         x = hidden_states
         if tokens is not None:
-            x = x.reshape(-1, x.shape[-1]).index_select(0, tokens[0])
-        outputs = _QKV.apply(x, *cached[1:])
-        if tokens is not None:
-            outputs = tuple(y.new_zeros((hidden_states.shape[0] * hidden_states.shape[1], y.shape[-1]))
-                .index_copy_(0, tokens[0], y).view(*hidden_states.shape[:-1], y.shape[-1]) for y in outputs)
+            frame = _ACTIVE.get()
+            io = getattr(frame, "_soup_projection_inverse", None)
+            if io is None or io[0] is not tokens[0]:
+                inverse = torch.full((tokens[1].numel(),), -1, device=x.device, dtype=torch.long)
+                inverse.index_copy_(0, tokens[0], torch.arange(tokens[0].numel(), device=x.device))
+                io = (tokens[0], inverse)
+                if hasattr(frame, "attention_mask"):
+                    frame._soup_projection_inverse = io
+            outputs = _FullQKV.apply(x, *cached[1:], tokens[0], io[1])
+        else:
+            outputs = _QKV.apply(x, *cached[1:])
         consumed = set()
         frame = _BASE.set((hidden_states, dict(zip(layers, outputs)), consumed))
         try:
