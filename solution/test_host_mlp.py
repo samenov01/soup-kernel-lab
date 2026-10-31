@@ -79,7 +79,8 @@ def test_host_load_config_preserves_original_config_and_quantization():
     assert local.device_map == {"": 0, "model.embed_tokens": "cpu", "lm_head": "cpu"}
 
 
-def test_local_nf4_checkpoint_peft_forward_backward_after_host_loading(tmp_path):
+@pytest.mark.parametrize("offload_mlp", [False, True])
+def test_local_nf4_checkpoint_peft_forward_backward_after_host_loading(tmp_path, monkeypatch, offload_mlp):
     # No hub request: a tiny locally generated model exercises the same HF
     # loader -> quantizer -> PEFT preparation -> model.to -> LoRA path.
     import peft
@@ -87,6 +88,8 @@ def test_local_nf4_checkpoint_peft_forward_backward_after_host_loading(tmp_path)
     from transformers import Qwen2Config, Qwen2ForCausalLM, BitsAndBytesConfig
     from transformers.models.qwen2.modeling_qwen2 import Qwen2Model, Qwen2MLP
     from solution.host_offload import patch_host_offload
+    import solution.host_offload as storage
+    monkeypatch.setattr(storage, "OFFLOAD_MLP", offload_mlp)
     from solution.host_mlp import patch_host_mlp_loading
     config = Qwen2Config(vocab_size=257, hidden_size=128, intermediate_size=256,
                         num_hidden_layers=2, num_attention_heads=4, num_key_value_heads=2,
@@ -123,7 +126,7 @@ def test_local_nf4_checkpoint_peft_forward_backward_after_host_loading(tmp_path)
         torch.manual_seed(83)
         model = peft.get_peft_model(model, deepcopy(lora)).train().to("cuda")
         for layer in model.get_base_model().model.layers:
-            assert layer.mlp.down_proj.weight.device.type == "cpu"
+            assert layer.mlp.down_proj.weight.device.type == ("cpu" if offload_mlp else "cuda")
         assert all(p.is_cuda for p in model.parameters() if p.requires_grad)
         torch.manual_seed(49)
         with torch.autocast("cuda", dtype=torch.float16):

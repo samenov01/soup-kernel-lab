@@ -6,16 +6,43 @@ the original CUDA device. All transfers take place during the measured run.
 """
 
 from dataclasses import dataclass
+import weakref
 import torch
 import torch.nn.functional as F
 from .chunked_head import _ACTIVE, _ChunkedHeadLoss
-from .streamed_head import StreamedHeadLoss, host_half_weight
+from .streamed_head import StreamedHeadLoss
 
 # This is storage policy inside our own autograd hooks, not a trainer setting.
 # Only activations that backward really consumes are retained; no reserve or
 # unused allocation is created. Storage aliases are counted once per forward.
 GPU_SAVED_BUDGET = 64 * 2**20
-STREAM_VOCABULARY = True
+# Speed candidate: spend VRAM on reusable operands instead of PCIe copies.
+# The external <=2000 MiB peak still needs a complete Kaggle measurement.
+STREAM_VOCABULARY = False
+OFFLOAD_MLP = False
+
+
+def resident_half_weight(weight, device):
+    """Reuse a real frozen head operand, built inside the measured process.
+
+    One GPU copy per parameter; refresh on writes, storage/layout changes or
+    a different execution device. Never cache logits, outputs or gradients.
+    """
+    device = torch.device(device)
+    if device.type == "cuda" and device.index is None:
+        device = torch.device("cuda", torch.cuda.current_device())
+    if weight.requires_grad or weight.dtype != torch.float32 or weight.device.type != "cpu":
+        raise RuntimeError("Resident head requires a frozen FP32 CPU parameter")
+    signature = (weight.data_ptr(), weight._version, tuple(weight.shape),
+                 tuple(weight.stride()), device)
+    cached = getattr(weight, "_soup_head_device_cache", None)
+    if cached is None or cached[0] != signature:
+        # Convert the current values directly; don't depend on another cache's
+        # invalidation contract. Only the Half operand is materialized on GPU.
+        half = weight.detach().half().pin_memory().to(device, non_blocking=True)
+        cached = (signature, half)
+        weight._soup_head_device_cache = cached
+    return cached[1]
 
 
 class _HostBackedFullHead(torch.autograd.Function):
@@ -23,7 +50,7 @@ class _HostBackedFullHead(torch.autograd.Function):
     def forward(ctx, hidden, weight, labels, divisor, mask):
         # Keep only the original Half matmul operand on GPU; the FP32 model
         # parameter stays on CPU. This retains the original head GEMM shapes.
-        half = host_half_weight(weight).to(hidden.device, non_blocking=True)
+        half = resident_half_weight(weight, hidden.device)
         return _ChunkedHeadLoss.forward(ctx, hidden, half, labels, divisor, mask)
 
     @staticmethod
@@ -54,20 +81,33 @@ def unpack_activation(packed):
 
 def budgeted_packer(budget=GPU_SAVED_BUDGET):
     retained = set()
+    offloaded = {}
     used = 0
     def pack(tensor):
         nonlocal used
-        if (tensor.is_cuda and tensor.dtype in (torch.float16, torch.float32, torch.bool)
-                and tensor.numel() * tensor.element_size() >= 65536):
-            storage = tensor.untyped_storage()
-            key = (storage.data_ptr(), storage.nbytes())
-            if key in retained:
-                return tensor.detach()
-            if used + storage.nbytes() <= budget:
-                retained.add(key)
-                used += storage.nbytes()
-                return tensor.detach()
-        return pack_activation(tensor)
+        if (not tensor.is_cuda or tensor.dtype not in (torch.float16, torch.float32, torch.bool)
+                or tensor.numel() * tensor.element_size() < 65536):
+            return tensor.detach()
+        storage = tensor.untyped_storage()
+        key = (storage.data_ptr(), storage.nbytes())
+        if key in retained:
+            return tensor.detach()
+        if used + storage.nbytes() <= budget:
+            retained.add(key)
+            used += storage.nbytes()
+            return tensor.detach()
+        # The same activation can be saved by several operations. Reuse its
+        # host snapshot only for the very same live Tensor and version. Weak
+        # references prevent this lookup table from retaining GPU storage.
+        key = id(tensor)
+        previous = offloaded.get(key)
+        if (previous is not None and previous[0]() is tensor
+                and previous[1] == tensor._version):
+            return previous[2]
+        packed = pack_activation(tensor)
+        if isinstance(packed, _HostTensor):
+            offloaded[key] = (weakref.ref(tensor), tensor._version, packed)
+        return packed
     return pack
 
 
@@ -118,7 +158,7 @@ def patch_host_offload():
             raise RuntimeError("PEFT frozen head dtype contract changed")
         if supported:
             offload_embedding(result)
-            if getattr(model, "_soup_cpu_embedding_load", False):
+            if OFFLOAD_MLP and getattr(model, "_soup_cpu_embedding_load", False):
                 from .host_mlp import offload_mlp
                 for layer in result.model.layers:
                     offload_mlp(layer.mlp)
@@ -147,7 +187,7 @@ def patch_host_offload():
         if not getattr(self, "_soup_host_head", False):
             return original_linear(self, x)
         if torch.is_autocast_enabled("cuda") and torch.get_autocast_dtype("cuda") == torch.float16:
-            weight = host_half_weight(self.weight).to(x.device, non_blocking=True)
+            weight = resident_half_weight(self.weight, x.device)
         else:
             weight = self.weight.to(x.device)
         return F.linear(x, weight, self.bias)

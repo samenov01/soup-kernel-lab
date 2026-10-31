@@ -116,3 +116,60 @@ def test_host_backed_full_head_matches_original_operands_exactly():
     for a, b in zip(got, ref):
         torch.testing.assert_close(a, b, atol=0, rtol=0)
     torch.testing.assert_close(dg, dr, atol=0, rtol=0)
+
+
+def test_resident_head_reuses_operand_and_invalidates_after_weight_update():
+    from solution.host_offload import resident_half_weight, _HostBackedFullHead
+    from solution.chunked_head import _ChunkedHeadLoss
+    torch.manual_seed(931)
+    w = torch.randn(257, 128) * 0.02
+    first = resident_half_weight(w, "cuda")
+    assert resident_half_weight(w, "cuda").data_ptr() == first.data_ptr()
+    with torch.no_grad():
+        w.add_(0.125)
+    second = resident_half_weight(w, "cuda")
+    assert second.data_ptr() != first.data_ptr()
+    torch.testing.assert_close(second.cpu(), w.half(), atol=0, rtol=0)
+    x = torch.randn(2, 17, 128, device="cuda", requires_grad=True)
+    labels = torch.randint(257, (2, 17), device="cuda")
+    labels[:, :3] = -100
+    for _ in range(2):
+        with torch.autocast("cuda", dtype=torch.float16):
+            actual = _HostBackedFullHead.apply(x, w, labels, None, None)
+            expected = _ChunkedHeadLoss.apply(x, w.cuda(), labels, None, None)
+        dx, = torch.autograd.grad(actual[0] * 65536, x)
+        ref, = torch.autograd.grad(expected[0] * 65536, x)
+        for a, b in zip(actual, expected):
+            torch.testing.assert_close(a, b, atol=0, rtol=0)
+        torch.testing.assert_close(dx, ref, atol=0, rtol=0)
+        assert resident_half_weight(w, "cuda").data_ptr() == second.data_ptr()
+
+
+def test_repeated_saved_activation_shares_snapshot_without_retaining_cuda_tensor():
+    import gc
+    import weakref
+    from solution.host_offload import budgeted_packer, unpack_activation
+    x = torch.randn(256, 128, device="cuda")
+    expected = x.clone()
+    pack = budgeted_packer(0)
+    before = pack(x)
+    assert pack(x) is before
+    x.add_(1)
+    after = pack(x)
+    assert after is not before
+    torch.testing.assert_close(unpack_activation(before), expected, atol=0, rtol=0)
+    torch.testing.assert_close(unpack_activation(after), expected + 1, atol=0, rtol=0)
+    reference = weakref.ref(x)
+    del x
+    gc.collect()
+    assert reference() is None
+
+
+def test_repeated_saved_activation_backward_matches_unhooked():
+    from solution.host_offload import budgeted_packer, unpack_activation
+    torch.manual_seed(932)
+    x = torch.randn(256, 128, device="cuda", requires_grad=True)
+    reference = torch.autograd.grad((x * x).sum(), x)[0]
+    with torch.autograd.graph.saved_tensors_hooks(budgeted_packer(0), unpack_activation):
+        actual = torch.autograd.grad((x * x).sum(), x)[0]
+    torch.testing.assert_close(actual, reference, atol=0, rtol=0)
