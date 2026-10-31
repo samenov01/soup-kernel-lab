@@ -1,0 +1,8 @@
+{
+  "adapter": "/kaggle/working/repo/runs/solution_1/adapter",
+  "eval_file": "/kaggle/working/repo/data/eval_public.jsonl",
+  "rows": 256,
+  "skipped_rows": 0,
+  "tokens": 38109,
+  "mean_loss": 2.04949
+}
