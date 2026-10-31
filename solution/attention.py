@@ -54,11 +54,12 @@ def causal_gqa_forward_kernel(Q, K, V, MASK, O, STATS, END,
 
 @triton.jit
 def causal_gqa_delta_kernel(O, DO, DELTA, ROWS, D: tl.constexpr):
-    row = tl.program_id(0)
+    row = tl.program_id(0) * 16 + tl.arange(0, 16)
     d = tl.arange(0, D)
-    o = tl.load(O + row * D + d).to(tl.float32)
-    grad = tl.load(DO + row * D + d).to(tl.float32)
-    tl.store(DELTA + row, tl.sum(o * grad))
+    offsets = row[:, None] * D + d[None, :]
+    o = tl.load(O + offsets, row[:, None] < ROWS, other=0).to(tl.float32)
+    grad = tl.load(DO + offsets, row[:, None] < ROWS, other=0).to(tl.float32)
+    tl.store(DELTA + row, tl.sum(o * grad, 1), row < ROWS)
 
 
 @triton.jit
@@ -138,7 +139,14 @@ class _CausalGQA(torch.autograd.Function):
         b, h, length, dim = q.shape
         kv = k.shape[1]
         mask = mask.contiguous()
-        end = (mask * torch.arange(1, length + 1, device=mask.device)).amax(-1).int()
+        from .chunked_head import _ACTIVE
+        frame = _ACTIVE.get()
+        shared = getattr(frame, "attention_mask", None) is mask
+        end = getattr(frame, "_soup_attention_end", None) if shared else None
+        if end is None:
+            end = (mask * torch.arange(1, length + 1, device=mask.device)).amax(-1).int()
+            if shared:
+                frame._soup_attention_end = end
         out = torch.empty_like(q)
         stats = torch.empty((b, h, length, 2), device=q.device, dtype=torch.float32)
         causal_gqa_forward_kernel[(triton.cdiv(length, 32), h, b)](
@@ -157,7 +165,8 @@ class _CausalGQA(torch.autograd.Function):
         grad = grad.contiguous()
         delta = torch.empty((b, h, length), device=q.device, dtype=torch.float32)
         dq, dk_heads, dv_heads = torch.empty_like(q), torch.empty_like(q), torch.empty_like(q)
-        causal_gqa_delta_kernel[(b * h * length,)](out, grad, delta, b * h * length, dim, num_warps=4)
+        causal_gqa_delta_kernel[(triton.cdiv(b * h * length, 16),)](
+            out, grad, delta, b * h * length, dim, num_warps=4)
         grid = (triton.cdiv(length, 32), h, b)
         causal_gqa_query_gradient_kernel[grid](q, k, v, grad, mask, stats, delta, dq, end,
             h, kv, length, dim, ctx.scale, 32, num_warps=4, num_stages=1)
