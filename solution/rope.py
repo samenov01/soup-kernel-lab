@@ -3,6 +3,7 @@
 import torch
 import triton
 import triton.language as tl
+from torch.autograd.function import once_differentiable
 
 
 @triton.jit
@@ -31,6 +32,8 @@ def rope_transform_kernel(X, COS, SIN, OUT, TOTAL, HEADS: tl.constexpr,
 
 
 def _transform(x, cos, sin, backward):
+    if x.stride(-1) != 1:
+        x = x.contiguous()
     out = torch.empty(x.shape, device=x.device, dtype=x.dtype)
     c0 = 0 if cos.shape[0] == 1 else cos.stride(0)
     rope_transform_kernel[(triton.cdiv(x.numel(), 512),)](
@@ -47,6 +50,7 @@ class _RoPE(torch.autograd.Function):
         return _transform(q, cos, sin, False), _transform(k, cos, sin, False)
 
     @staticmethod
+    @once_differentiable
     def backward(ctx, dq, dk):
         cos, sin = ctx.saved_tensors
         return _transform(dq, cos, sin, True), _transform(dk, cos, sin, True), None, None
@@ -60,7 +64,7 @@ def patch_rope():
 
     def rotary(q, k, cos, sin, unsqueeze_dim=1):
         supported = (
-            unsqueeze_dim == 1 and q.is_cuda and q.dtype == k.dtype == torch.float32
+            unsqueeze_dim == 1 and q.is_cuda and q.numel() > 0 and q.dtype == k.dtype == torch.float32
             and q.ndim == k.ndim == 4 and q.shape[0] == k.shape[0]
             and q.shape[2:] == k.shape[2:] and q.shape[-1] % 2 == 0
             and q.stride(-1) == k.stride(-1) == 1
