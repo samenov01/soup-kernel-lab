@@ -10,8 +10,8 @@ pytestmark = pytest.mark.skipif(not torch.cuda.is_available(), reason="needs CUD
 @pytest.mark.parametrize("amp_scale", [1., 65536.])
 def test_causal_gqa_outputs_and_scaled_gradients(length, dim, side, amp_scale):
     torch.manual_seed(38)
-    q = torch.randn(2, 12, length, dim, device="cuda", requires_grad=True) * 0.3
-    k = torch.randn(2, 2, length, dim, device="cuda", requires_grad=True) * 0.3
+    q = torch.randn(2, 12, length, dim, device="cuda", requires_grad=True) * 0.8
+    k = torch.randn(2, 2, length, dim, device="cuda", requires_grad=True) * 0.8
     v = torch.randn_like(k, requires_grad=True)
     mask = torch.ones(2, length, device="cuda", dtype=torch.long)
     if side == "left": mask[0, :length // 2] = 0

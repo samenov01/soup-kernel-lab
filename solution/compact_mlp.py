@@ -11,6 +11,8 @@ from torch.autograd.function import once_differentiable
 
 from .swiglu import BLOCK, example_swiglu_fwd_kernel, example_swiglu_bwd_kernel
 
+_gate_up = None
+
 
 class _CompactSwiGLU(torch.autograd.Function):
     @staticmethod
@@ -58,8 +60,11 @@ def patch_compact_mlp():
             return original(self, x)
         # Separate casts preserve the original fp32 accumulation of the two
         # input-gradient branches. Sharing a cast would add them in fp16.
-        gate = self.gate_proj(x.to(torch.float16))
-        up = self.up_proj(x.to(torch.float16))
+        if _gate_up is None:
+            gate = self.gate_proj(x.to(torch.float16))
+            up = self.up_proj(x.to(torch.float16))
+        else:
+            gate, up = _gate_up(self, x)
         return self.down_proj(_CompactSwiGLU.apply(gate, up)).float()
 
     forward._soup_compact_patch = True
