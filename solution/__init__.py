@@ -23,6 +23,7 @@ from .padded_mlp import patch_padded_mlp
 from .padded_attention import patch_padded_attention
 from .rope import patch_rope
 from .merged_gate_up import patch_merged_gate_up
+from .merged_qkv import patch_merged_qkv
 
 _applied = False
 
@@ -41,4 +42,5 @@ def apply():
     patch_padded_attention()
     patch_rope()
     patch_merged_gate_up()
+    patch_merged_qkv()
     _applied = True
