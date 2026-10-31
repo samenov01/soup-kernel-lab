@@ -81,7 +81,7 @@ def main():
             raise SystemExit("Choose a new output directory to preserve previous runs")
         out.mkdir(parents=True, exist_ok=True)
         ref = KERNEL + (f"/{args.version}" if args.version else "")
-        call("kernels", "output", ref, "-p", str(out), "--file-pattern", r"(^|/)(kernel_results\.zip|run_status\.json)$")
+        call("kernels", "output", ref, "-p", str(out), "--file-pattern", r"^(kernel_results\.zip|run_status\.json)$")
 
 
 if __name__ == "__main__":

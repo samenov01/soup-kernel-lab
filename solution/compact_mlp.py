@@ -1,6 +1,7 @@
 """Retain the original fp16 projection values instead of redundant fp32 copies.
 
-SwiGLU still computes and returns fp32, as the original fp32-input MLP did.
+SwiGLU still computes in fp32 and rounds at the same down-projection boundary.
+The complete MLP returns fp32, as the original fp32-input MLP did.
 The organizer's kernels are reused unchanged and are never claimed as ours.
 """
 
@@ -15,7 +16,9 @@ class _CompactSwiGLU(torch.autograd.Function):
     @staticmethod
     def forward(ctx, gate, up):
         gate, up = gate.contiguous(), up.contiguous()
-        out = torch.empty(gate.shape, device=gate.device, dtype=torch.float32)
+        # Fuse the fp16 conversion that Linear4bit's down projection performed
+        # immediately after the original fp32 SwiGLU result.
+        out = torch.empty_like(gate)
         example_swiglu_fwd_kernel[(triton.cdiv(gate.numel(), BLOCK),)](
             gate, up, out, gate.numel(), BLOCK=BLOCK)
         ctx.save_for_backward(gate, up)
@@ -29,7 +32,7 @@ class _CompactSwiGLU(torch.autograd.Function):
         # The original path computed in fp32 then cast each projection gradient
         # separately to fp16 at Linear4bit's output cast. Preserve that order.
         example_swiglu_bwd_kernel[(triton.cdiv(gate.numel(), BLOCK),)](
-            grad.float().contiguous(), gate, up, dgate, dup, gate.numel(), BLOCK=BLOCK)
+            grad.contiguous(), gate, up, dgate, dup, gate.numel(), BLOCK=BLOCK)
         return dgate, dup
 
 
@@ -57,7 +60,7 @@ def patch_compact_mlp():
         # input-gradient branches. Sharing a cast would add them in fp16.
         gate = self.gate_proj(x.to(torch.float16))
         up = self.up_proj(x.to(torch.float16))
-        return self.down_proj(_CompactSwiGLU.apply(gate, up))
+        return self.down_proj(_CompactSwiGLU.apply(gate, up)).float()
 
     forward._soup_compact_patch = True
     modeling_qwen2.Qwen2MLP.forward = forward
