@@ -24,6 +24,7 @@ from .padded_attention import patch_padded_attention
 from .rope import patch_rope
 from .merged_gate_up import patch_merged_gate_up
 from .merged_qkv import patch_merged_qkv
+from .compact_lora import patch_compact_lora
 
 _applied = False
 
@@ -43,4 +44,5 @@ def apply():
     patch_rope()
     patch_merged_gate_up()
     patch_merged_qkv()
+    patch_compact_lora()
     _applied = True

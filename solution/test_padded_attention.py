@@ -15,9 +15,11 @@ def test_attention_projection_compaction(side):
     from solution.padded_mlp import patch_padded_mlp
     from solution.padded_attention import patch_padded_attention
     from solution.merged_qkv import patch_merged_qkv
+    from solution.compact_lora import patch_compact_lora
+    from peft.tuners.lora.bnb import Linear4bit as LoRALinear4bit
 
     originals = (Qwen2Attention.forward, Qwen2Model.forward, Qwen2MLP.forward,
-                 torch.nn.Linear.forward, Linear4bit.forward)
+                 torch.nn.Linear.forward, Linear4bit.forward, LoRALinear4bit.forward)
     torch.manual_seed(952)
     config = Qwen2Config(vocab_size=257, hidden_size=128, intermediate_size=256,
         num_hidden_layers=2, num_attention_heads=4, num_key_value_heads=2,
@@ -72,6 +74,13 @@ def test_attention_projection_compaction(side):
             torch.testing.assert_close(a, b, atol=5e-3, rtol=1e-2)
         assert torch.equal(rng_ref, rng_merged)
         assert (merged_grads[0][~mask.bool()] == 0).all()
+        torch.cuda.set_rng_state(rng)
+        patch_compact_lora()
+        fused, fused_grads, rng_fused = run()
+        torch.testing.assert_close(fused[mask.bool()], ref[mask.bool()], atol=2e-3, rtol=3e-3)
+        for a, b in zip(fused_grads, grads):
+            torch.testing.assert_close(a, b, atol=5e-3, rtol=1e-2)
+        assert torch.equal(rng_ref, rng_fused)
     finally:
         (Qwen2Attention.forward, Qwen2Model.forward, Qwen2MLP.forward,
-         torch.nn.Linear.forward, Linear4bit.forward) = originals
+         torch.nn.Linear.forward, Linear4bit.forward, LoRALinear4bit.forward) = originals
