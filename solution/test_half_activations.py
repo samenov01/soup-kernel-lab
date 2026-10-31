@@ -60,7 +60,6 @@ def test_decoder_half_storage_keeps_parameters_and_head_dtype():
     labels[mask == 0] = -100
     params = [p for p in model.parameters() if p.requires_grad]
     originals = qwen.Qwen2Model.forward, qwen.Qwen2DecoderLayer.forward, qwen.Qwen2RMSNorm.forward
-    dtypes = {name: p.dtype for name, p in model.named_parameters()}
 
     def run():
         with torch.autocast("cuda", dtype=torch.float16):
@@ -74,6 +73,8 @@ def test_decoder_half_storage_keeps_parameters_and_head_dtype():
     hooks = []
     try:
         reference, dr = run()
+        # Native bnb initializes frozen bias dtype on its first forward too.
+        dtypes = {name: p.dtype for name, p in model.named_parameters()}
         patch_half_activations()
         base = model.get_base_model().model
         hooks.append(base.layers[0].mlp.register_forward_hook(
