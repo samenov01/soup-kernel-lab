@@ -1,0 +1,466 @@
+{
+  "device": "Tesla T4",
+  "diagnostic_only": true,
+  "rows": [
+    {
+      "m": 512,
+      "k": 1536,
+      "n": 8960,
+      "max_abs_diff": 0.0,
+      "nn_ms": 0.4744076919555664,
+      "tn_ms": 0.45109119415283205,
+      "flipped_ms": 0.5341670227050781,
+      "column_out_ms": 0.7025459289550782,
+      "lt_max_abs_diff": 0.0,
+      "lt_nn_ms": 0.7314649963378906,
+      "lt_tn_ms": 0.8507571411132813
+    },
+    {
+      "m": 512,
+      "k": 17920,
+      "n": 1536,
+      "max_abs_diff": 9.1552734375e-05,
+      "nn_ms": 1.3424102783203125,
+      "tn_ms": 1.4707200622558594,
+      "flipped_ms": 1.3538841247558593,
+      "column_out_ms": 1.3545907592773438,
+      "lt_max_abs_diff": 0.0,
+      "lt_nn_ms": 1.373465576171875,
+      "lt_tn_ms": 1.5792256164550782
+    },
+    {
+      "m": 512,
+      "k": 1792,
+      "n": 1536,
+      "max_abs_diff": 1.52587890625e-05,
+      "nn_ms": 0.2424038314819336,
+      "tn_ms": 0.18104320526123047,
+      "flipped_ms": 0.1841062355041504,
+      "column_out_ms": 0.18332799911499023,
+      "lt_max_abs_diff": 0.0,
+      "lt_nn_ms": 0.20373504638671874,
+      "lt_tn_ms": 0.166693115234375
+    },
+    {
+      "m": 512,
+      "k": 1536,
+      "n": 1536,
+      "max_abs_diff": 1.52587890625e-05,
+      "nn_ms": 0.16192895889282227,
+      "tn_ms": 0.1440435218811035,
+      "flipped_ms": 0.13934720039367676,
+      "column_out_ms": 0.13072768211364746,
+      "lt_max_abs_diff": 0.0,
+      "lt_nn_ms": 0.14225791931152343,
+      "lt_tn_ms": 0.13047167778015137
+    },
+    {
+      "m": 1024,
+      "k": 1536,
+      "n": 8960,
+      "max_abs_diff": 0.0,
+      "nn_ms": 0.9297907257080078,
+      "tn_ms": 1.2682905578613282,
+      "flipped_ms": 1.3204684448242188,
+      "column_out_ms": 1.2981184387207032,
+      "lt_max_abs_diff": 0.0,
+      "lt_nn_ms": 1.2703321838378907,
+      "lt_tn_ms": 1.5154508972167968
+    },
+    {
+      "m": 1024,
+      "k": 17920,
+      "n": 1536,
+      "max_abs_diff": 9.1552734375e-05,
+      "nn_ms": 2.7172506713867186,
+      "tn_ms": 2.9847064208984375,
+      "flipped_ms": 2.6810546875,
+      "column_out_ms": 2.73504638671875,
+      "lt_max_abs_diff": 0.0,
+      "lt_nn_ms": 2.7505010986328124,
+      "lt_tn_ms": 3.2138265991210937
+    },
+    {
+      "m": 1024,
+      "k": 1792,
+      "n": 1536,
+      "max_abs_diff": 0.0,
+      "nn_ms": 0.4046963119506836,
+      "tn_ms": 0.38985729217529297,
+      "flipped_ms": 0.33797630310058596,
+      "column_out_ms": 0.3283135986328125,
+      "lt_max_abs_diff": 1.52587890625e-05,
+      "lt_nn_ms": 0.3503014373779297,
+      "lt_tn_ms": 0.3083328056335449
+    },
+    {
+      "m": 1024,
+      "k": 1536,
+      "n": 1536,
+      "max_abs_diff": 0.0,
+      "nn_ms": 0.28774784088134764,
+      "tn_ms": 0.27828351974487303,
+      "flipped_ms": 0.2632089614868164,
+      "column_out_ms": 0.25829376220703126,
+      "lt_max_abs_diff": 1.52587890625e-05,
+      "lt_nn_ms": 0.28418176651000976,
+      "lt_tn_ms": 0.2451033592224121
+    },
+    {
+      "m": 1536,
+      "k": 1536,
+      "n": 8960,
+      "max_abs_diff": 0.0,
+      "nn_ms": 1.877541046142578,
+      "tn_ms": 2.1904754638671875,
+      "flipped_ms": 2.2065498352050783,
+      "column_out_ms": 2.0218496704101563,
+      "lt_max_abs_diff": 0.0,
+      "lt_nn_ms": 2.424901123046875,
+      "lt_tn_ms": 2.5042048645019532
+    },
+    {
+      "m": 1536,
+      "k": 17920,
+      "n": 1536,
+      "max_abs_diff": 6.103515625e-05,
+      "nn_ms": 4.079092407226563,
+      "tn_ms": 4.0296627807617185,
+      "flipped_ms": 4.0294091796875,
+      "column_out_ms": 4.101452941894531,
+      "lt_max_abs_diff": 0.0,
+      "lt_nn_ms": 4.1662054443359375,
+      "lt_tn_ms": 4.005465698242188
+    },
+    {
+      "m": 1536,
+      "k": 1792,
+      "n": 1536,
+      "max_abs_diff": 0.0,
+      "nn_ms": 0.41868927001953127,
+      "tn_ms": 0.4147212982177734,
+      "flipped_ms": 0.4100313568115234,
+      "column_out_ms": 0.40105472564697264,
+      "lt_max_abs_diff": 0.0,
+      "lt_nn_ms": 0.3992588806152344,
+      "lt_tn_ms": 0.38800510406494143
+    },
+    {
+      "m": 1536,
+      "k": 1536,
+      "n": 1536,
+      "max_abs_diff": 0.0,
+      "nn_ms": 0.3385753631591797,
+      "tn_ms": 0.3485567855834961,
+      "flipped_ms": 0.3449715042114258,
+      "column_out_ms": 0.3441638565063477,
+      "lt_max_abs_diff": 0.0,
+      "lt_nn_ms": 0.355863037109375,
+      "lt_tn_ms": 0.3677388763427734
+    }
+  ],
+  "imports_by_cumulative": [
+    {
+      "self_us": 371090,
+      "total_us": 3251345,
+      "module": "transformers"
+    },
+    {
+      "self_us": 13011,
+      "total_us": 2880084,
+      "module": "transformers.dependency_versions_check"
+    },
+    {
+      "self_us": 255,
+      "total_us": 2866882,
+      "module": "transformers.utils.versions"
+    },
+    {
+      "self_us": 841,
+      "total_us": 2866627,
+      "module": "transformers.utils"
+    },
+    {
+      "self_us": 5178,
+      "total_us": 2671130,
+      "module": "transformers.utils.auto_docstring"
+    },
+    {
+      "self_us": 2627,
+      "total_us": 2657026,
+      "module": "transformers.utils.generic"
+    },
+    {
+      "self_us": 311,
+      "total_us": 2525595,
+      "module": "trl.trainer"
+    },
+    {
+      "self_us": 1196,
+      "total_us": 2525285,
+      "module": "trl"
+    },
+    {
+      "self_us": 4382,
+      "total_us": 2523830,
+      "module": "trl._compat"
+    },
+    {
+      "self_us": 2519449,
+      "total_us": 2519449,
+      "module": "trl.import_utils"
+    },
+    {
+      "self_us": 2404613,
+      "total_us": 2405256,
+      "module": "transformers.utils.import_utils"
+    },
+    {
+      "self_us": 254965,
+      "total_us": 1781502,
+      "module": "torch"
+    },
+    {
+      "self_us": 2821,
+      "total_us": 1247505,
+      "module": "transformers.trainer_utils"
+    },
+    {
+      "self_us": 483,
+      "total_us": 1244684,
+      "module": "peft"
+    },
+    {
+      "self_us": 515,
+      "total_us": 1091652,
+      "module": "peft.helpers"
+    },
+    {
+      "self_us": 60907,
+      "total_us": 1091138,
+      "module": "bitsandbytes"
+    },
+    {
+      "self_us": 1267,
+      "total_us": 1018150,
+      "module": "transformers.generation.candidate_generator"
+    },
+    {
+      "self_us": 588,
+      "total_us": 1016387,
+      "module": "sklearn.metrics"
+    },
+    {
+      "self_us": 377,
+      "total_us": 983276,
+      "module": "sklearn"
+    },
+    {
+      "self_us": 1599,
+      "total_us": 980977,
+      "module": "sklearn.base"
+    },
+    {
+      "self_us": 48,
+      "total_us": 977833,
+      "module": "sklearn.utils._estimator_html_repr"
+    },
+    {
+      "self_us": 616,
+      "total_us": 977786,
+      "module": "sklearn.utils"
+    },
+    {
+      "self_us": 18460,
+      "total_us": 953786,
+      "module": "bitsandbytes.backends.default.ops"
+    },
+    {
+      "self_us": 243,
+      "total_us": 943688,
+      "module": "sklearn.utils._chunking"
+    },
+    {
+      "self_us": 848,
+      "total_us": 943445,
+      "module": "sklearn.utils._param_validation"
+    },
+    {
+      "self_us": 827,
+      "total_us": 854737,
+      "module": "sklearn.utils.validation"
+    },
+    {
+      "self_us": 497,
+      "total_us": 848884,
+      "module": "sklearn.utils._array_api"
+    },
+    {
+      "self_us": 738,
+      "total_us": 755664,
+      "module": "transformers.activations"
+    },
+    {
+      "self_us": 814,
+      "total_us": 754927,
+      "module": "transformers.integrations.hub_kernels"
+    },
+    {
+      "self_us": 631,
+      "total_us": 751242,
+      "module": "transformers.conversion_mapping"
+    }
+  ],
+  "imports_by_self": [
+    {
+      "self_us": 2519449,
+      "total_us": 2519449,
+      "module": "trl.import_utils"
+    },
+    {
+      "self_us": 2404613,
+      "total_us": 2405256,
+      "module": "transformers.utils.import_utils"
+    },
+    {
+      "self_us": 371090,
+      "total_us": 3251345,
+      "module": "transformers"
+    },
+    {
+      "self_us": 333418,
+      "total_us": 405206,
+      "module": "torch._C"
+    },
+    {
+      "self_us": 333375,
+      "total_us": 333375,
+      "module": "transformers.models"
+    },
+    {
+      "self_us": 254965,
+      "total_us": 1781502,
+      "module": "torch"
+    },
+    {
+      "self_us": 201529,
+      "total_us": 201529,
+      "module": "nibabel.streamlines.array_sequence"
+    },
+    {
+      "self_us": 173054,
+      "total_us": 175377,
+      "module": "torch._prims"
+    },
+    {
+      "self_us": 151189,
+      "total_us": 151189,
+      "module": "torch._inductor.decomposition"
+    },
+    {
+      "self_us": 124400,
+      "total_us": 131460,
+      "module": "torch._inductor.utils"
+    },
+    {
+      "self_us": 103334,
+      "total_us": 386994,
+      "module": "torch._meta_registrations"
+    },
+    {
+      "self_us": 100832,
+      "total_us": 408560,
+      "module": "torch._inductor.lowering"
+    },
+    {
+      "self_us": 83690,
+      "total_us": 100471,
+      "module": "scipy.stats._continuous_distns"
+    },
+    {
+      "self_us": 71075,
+      "total_us": 74581,
+      "module": "triton.backends"
+    },
+    {
+      "self_us": 65738,
+      "total_us": 74464,
+      "module": "fsspec"
+    },
+    {
+      "self_us": 62088,
+      "total_us": 229497,
+      "module": "networkx"
+    },
+    {
+      "self_us": 61270,
+      "total_us": 61270,
+      "module": "networkx.utils.backends"
+    },
+    {
+      "self_us": 60907,
+      "total_us": 1091138,
+      "module": "bitsandbytes"
+    },
+    {
+      "self_us": 60694,
+      "total_us": 193885,
+      "module": "wandb.sdk.wandb_settings"
+    },
+    {
+      "self_us": 59787,
+      "total_us": 59787,
+      "module": "bitsandbytes._ops"
+    },
+    {
+      "self_us": 57822,
+      "total_us": 57822,
+      "module": "torchvision._meta_registrations"
+    },
+    {
+      "self_us": 57080,
+      "total_us": 59305,
+      "module": "aiohttp.connector"
+    },
+    {
+      "self_us": 56533,
+      "total_us": 56533,
+      "module": "rich.terminal_theme"
+    },
+    {
+      "self_us": 52735,
+      "total_us": 52735,
+      "module": "torch._dynamo._trace_wrapped_higher_order_op"
+    },
+    {
+      "self_us": 52179,
+      "total_us": 52415,
+      "module": "wandb._pydantic.base"
+    },
+    {
+      "self_us": 52152,
+      "total_us": 297339,
+      "module": "scipy.stats._stats_py"
+    },
+    {
+      "self_us": 50856,
+      "total_us": 50856,
+      "module": "torch.utils._debug_mode"
+    },
+    {
+      "self_us": 49172,
+      "total_us": 68205,
+      "module": "torch._refs"
+    },
+    {
+      "self_us": 39970,
+      "total_us": 46426,
+      "module": "torch._inductor.ir"
+    },
+    {
+      "self_us": 39451,
+      "total_us": 214827,
+      "module": "torch._decomp.decompositions"
+    }
+  ]
+}

@@ -58,3 +58,18 @@ dropout, RNG и trainer gradient_checkpointing не меняются. Испол
 
 Полный код следующего кандидата:
 `33641b98b154e95cb14849c6f3264aee23eefd78`, Kaggle 19, один повтор.
+
+Следующий вариант `a627f3906d01a7f87ba0b465f7565a1b30a2aa4b` объединяет
+QKV gather/scatter в custom autograd и делает такие же компактные IO внутри
+MLP. Независимый запуск T4 `soup-kernel-layout-probe/1` подтвердил
+**119 unit-тестов**, включая FP16/FP32 QKV, padded MLP и сохранение тензоров.
+[Диагностика и лог](measurements/layout_probe_v1/).
+Это diagnostic-only, а не полное обучение или admission.
+
+Проверены обычный, транспонированный и column-major output GEMM, cuBLAS и
+cuBLASLt. На крупных MLP-матрицах устойчивого выигрыша нет: например,
+M=1024/K=17920/N=1536 даёт 2.72 мс обычным NN против 2.98 мс TN.
+Глобальное переключение BLAS не применено. Отдельные маленькие attention
+матрицы выигрывают, но этого недостаточно для заявления цели по wall-time.
+Свежий полный кандидат отправлен на два повтора в
+`diassamenov/soup-kernel-layout-probe/2`; окончательного результата ещё нет.
