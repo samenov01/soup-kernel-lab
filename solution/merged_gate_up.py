@@ -60,7 +60,7 @@ def share_packed_storage(weights, packed):
             offset += size
 
 
-def merged_gate_up(module, x):
+def packed_gate_up(module):
     from bitsandbytes.functional import QuantState
     gate, up = module.gate_proj.weight, module.up_proj.weight
     a, b = gate.quant_state, up.quant_state
@@ -70,7 +70,7 @@ def merged_gate_up(module, x):
         and a.blocksize == b.blocksize and a.shape[0] * a.shape[1] % 2 == 0
     )
     if not supported:
-        return module.gate_proj(x.to(torch.float16)), module.up_proj(x.to(torch.float16))
+        return None
     signature = (_signature(gate), _signature(up))
     cached = getattr(module, "_soup_merged_gate_up", None)
     if cached is None or cached[0] != signature:
@@ -82,6 +82,13 @@ def merged_gate_up(module, x):
         signature = (_signature(gate), _signature(up))
         cached = (signature, packed, state)
         module._soup_merged_gate_up = cached
+    return cached
+
+
+def merged_gate_up(module, x):
+    cached = packed_gate_up(module)
+    if cached is None:
+        return module.gate_proj(x.to(torch.float16)), module.up_proj(x.to(torch.float16))
     merged = _GateUp.apply(x, cached[1], cached[2])
     return merged.chunk(2, dim=-1)
 

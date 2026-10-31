@@ -28,6 +28,7 @@ from .compact_lora import patch_compact_lora
 from .half_activations import patch_half_activations
 from .unpadded_sdpa import patch_unpadded_sdpa
 from .nf4_backward import patch_nf4_backward
+from .recomputed_mlp import patch_recomputed_mlp
 
 _applied = False
 
@@ -51,4 +52,5 @@ def apply():
     patch_half_activations()
     patch_unpadded_sdpa()
     patch_nf4_backward()
+    patch_recomputed_mlp()
     _applied = True
