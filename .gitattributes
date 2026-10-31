@@ -1,0 +1,2 @@
+# Preserve measured bytes and their SHA256 across Windows/Linux checkouts.
+docs/measurements/** -text
