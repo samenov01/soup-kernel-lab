@@ -1,0 +1,57 @@
+{
+  "result_sha256": "556eda314abccb517ef1773558b29c4d55b2effdd7af82aee986966b149b61dd",
+  "solution_sha256": "1b458cc4eb2da44981d3c6c36e45f2cf8b0ca5c599996a9e32507f372f0e5268",
+  "checks": [
+    {
+      "check": "1. every base and solution run finished",
+      "ok": false,
+      "detail": "1 base and 1 solution runs of 1 each; failed: solution_1"
+    },
+    {
+      "check": "2. no ready-made kernel libraries",
+      "ok": true,
+      "detail": "loaded: none; imported in solution/: none; packages changed during the run: none"
+    },
+    {
+      "check": "3. own @triton.jit kernels in solution/ run in training",
+      "ok": false,
+      "detail": "none ran in every run; not launched in every solution run: attention_pack_kernel, head_stream_finish_kernel, head_stream_gradient_kernel, head_stream_stats_kernel, nf4_unpack_scale_kernel, projection_gather_kernel, projection_scatter_kernel, qkv_gradient_gather_kernel, qkv_scatter_kernel, rmsnorm_backward_kernel, rmsnorm_forward_kernel, rope_transform_kernel, sparse_lora_add_kernel, sparse_lora_gradient_kernel, vocab_ce_backward_kernel, vocab_ce_finish_kernel, vocab_entropy_finish_kernel, vocab_partial_kernel; the example's kernels do not count, under any name: example_swiglu_fwd_kernel, example_swiglu_bwd_kernel"
+    },
+    {
+      "check": "4. own kernels together take >= 5% of the training time",
+      "ok": false,
+      "detail": "no solution run"
+    },
+    {
+      "check": "5. same task and Soup outputs (steps, adapter, settings, tokens, metrics, rewind)",
+      "ok": false,
+      "detail": "needs a finished base run and a finished solution run"
+    },
+    {
+      "check": "6. loss curve follows the base",
+      "ok": false,
+      "detail": "needs a finished base run and a finished solution run"
+    },
+    {
+      "check": "7. quality: eval loss at most 0.5% above the base",
+      "ok": false,
+      "detail": "eval missing (needs finished base and solution runs)"
+    },
+    {
+      "check": "8. not worse than the base on time or memory (10% margin)",
+      "ok": false,
+      "detail": "needs finished base and solution runs"
+    },
+    {
+      "check": "9. clean measurement (a T4, idle GPUs, one GPU, harness allocator, peaks agree)",
+      "ok": true,
+      "detail": "clean"
+    },
+    {
+      "check": "10. Soup regression tests with your patches",
+      "ok": true,
+      "detail": "79 passed, 14 warnings in 0.37s"
+    }
+  ],
+  "notes": []
+}

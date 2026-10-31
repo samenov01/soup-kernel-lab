@@ -1,0 +1,36 @@
+Loading config from /kaggle/working/runs/solution_1/task.yaml...
+╭─────────────────────────────── Training Setup ───────────────────────────────╮
+│ Device:  Tesla T4                                                            │
+│ Memory:  14.6 GB                                                             │
+│ Model:   Qwen/Qwen2.5-1.5B-Instruct                                          │
+│ Task:    sft                                                                 │
+│ Backend: transformers                                                        │
+│ LoRA:    r=16, alpha=32                                                      │
+│ Quant:   4bit                                                                │
+│ Seed:    1                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────╯
+Loading dataset...
+Loaded: 256 train samples
+Run ID: run_20261031_154304_a3512e0a
+Setting up model + trainer...
+Loading tokenizer: Qwen/Qwen2.5-1.5B-Instruct
+Loading model: Qwen/Qwen2.5-1.5B-Instruct
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights:   0%|          | 0/338 [00:00<?, ?it/s]Loading weights:   0%|          | 1/338 [00:00<02:31,  2.23it/s]Loading weights:   1%|          | 4/338 [00:00<00:37,  8.84it/s]Loading weights:   8%|▊         | 27/338 [00:00<00:04, 64.20it/s]Loading weights:  14%|█▍        | 47/338 [00:00<00:02, 99.36it/s]Loading weights:  19%|█▉        | 65/338 [00:00<00:02, 117.21it/s]Loading weights:  26%|██▌       | 88/338 [00:00<00:01, 145.83it/s]Loading weights:  33%|███▎      | 111/338 [00:01<00:01, 167.14it/s]Loading weights:  38%|███▊      | 130/338 [00:01<00:01, 173.53it/s]Loading weights:  44%|████▍     | 149/338 [00:01<00:01, 169.76it/s]Loading weights:  51%|█████     | 172/338 [00:01<00:00, 182.77it/s]Loading weights:  58%|█████▊    | 195/338 [00:01<00:00, 191.83it/s]Loading weights:  64%|██████▎   | 215/338 [00:01<00:00, 191.26it/s]Loading weights:  70%|██████▉   | 235/338 [00:01<00:00, 186.81it/s]Loading weights:  76%|███████▌  | 256/338 [00:01<00:00, 191.28it/s]Loading weights:  83%|████████▎ | 279/338 [00:01<00:00, 198.56it/s]Loading weights:  89%|████████▉ | 300/338 [00:02<00:00, 199.13it/s]Loading weights:  95%|█████████▍| 321/338 [00:02<00:00, 192.22it/s]Loading weights: 100%|██████████| 338/338 [00:02<00:00, 151.12it/s]
+LoRA applied: 2,179,072 trainable / 1,545,893,376 total (0.14%)
+Map:   0%|          | 0/256 [00:00<?, ? examples/s][transformers] return_assistant_tokens_mask==True but chat template does not contain `{% generation %}` keyword.
+Map:  14%|█▎        | 35/256 [00:00<00:00, 332.32 examples/s]Map:  32%|███▏      | 83/256 [00:00<00:00, 413.04 examples/s]Map:  52%|█████▏    | 132/256 [00:00<00:00, 446.21 examples/s]Map:  72%|███████▏  | 185/256 [00:00<00:00, 468.96 examples/s]Map:  92%|█████████▏| 236/256 [00:00<00:00, 478.44 examples/s]Map: 100%|██████████| 256/256 [00:00<00:00, 428.27 examples/s]
+Map:   0%|          | 0/256 [00:00<?, ? examples/s]Map: 100%|██████████| 256/256 [00:00<00:00, 4135.77 examples/s]
+Truncating train dataset:   0%|          | 0/256 [00:00<?, ? examples/s]Truncating train dataset: 100%|██████████| 256/256 [00:00<00:00, 37770.57 examples/s]
+Rewind log: /kaggle/working/runs/solution_1/adapter/rewind.jsonl
+Base revision: unknown (existing loading behavior preserved)
+Training started!
+
+[transformers] The tokenizer has new PAD/BOS/EOS tokens that differ from the model config and generation config. The model config and generation config were aligned accordingly, being updated with the tokenizer's values. Updated tokens: {'bos_token_id': None, 'pad_token_id': 151643}.
+  0%|          | 0/64 [00:00<?, ?it/s]Crash bundle written: 
+/kaggle/working/repo/.soup-crashes/crash_20261031T154312Z_ecf809a0.crash
+Attach this file when reporting the failure.
+
+Error: RuntimeError: Frozen embedding unexpectedly moved from host storage
+Run with --verbose for the full traceback.
+  0%|          | 0/64 [00:00<?, ?it/s]

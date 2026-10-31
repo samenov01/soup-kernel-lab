@@ -70,7 +70,8 @@ def test_host_tied_embedding_identity_dtype_and_values():
     from peft.utils import other
     from transformers.models.qwen2.modeling_qwen2 import Qwen2Model
     originals = (peft.prepare_model_for_kbit_training, other.prepare_model_for_kbit_training,
-                 torch.nn.Embedding.forward, torch.nn.Linear.forward, Qwen2Model.forward)
+                 torch.nn.Embedding.forward, torch.nn.Linear.forward, Qwen2Model.forward,
+                 Qwen2ForCausalLM._apply)
     torch.manual_seed(19)
     m = Qwen2ForCausalLM(Qwen2Config(vocab_size=257, hidden_size=128, intermediate_size=256,
           num_hidden_layers=1, num_attention_heads=4, num_key_value_heads=2, tie_word_embeddings=True)).cuda()
@@ -86,6 +87,32 @@ def test_host_tied_embedding_identity_dtype_and_values():
         assert weight.dtype == torch.float32 and not weight.requires_grad
         assert weight.device.type == "cpu"
         torch.testing.assert_close(actual, expected, atol=0, rtol=0)
+        # Trainer/Accelerate may issue model.to(cuda) after the initial setup.
+        m.to("cuda")
+        assert m.model.embed_tokens.weight is m.lm_head.weight
+        assert m.lm_head.weight.device.type == "cpu"
+        assert m.lm_head.weight.dtype == torch.float32
+        torch.testing.assert_close(m.model.embed_tokens(ids), expected, atol=0, rtol=0)
     finally:
         (peft.prepare_model_for_kbit_training, other.prepare_model_for_kbit_training,
-         torch.nn.Embedding.forward, torch.nn.Linear.forward, Qwen2Model.forward) = originals
+         torch.nn.Embedding.forward, torch.nn.Linear.forward, Qwen2Model.forward,
+         Qwen2ForCausalLM._apply) = originals
+
+
+def test_host_backed_full_head_matches_original_operands_exactly():
+    from solution.host_offload import _HostBackedFullHead
+    from solution.chunked_head import _ChunkedHeadLoss
+    torch.manual_seed(91)
+    x = torch.randn(2, 17, 128, device="cuda", requires_grad=True)
+    w = torch.randn(9001, 128, device="cuda") * 0.02
+    labels = torch.randint(9001, (2, 17), device="cuda")
+    labels[:, :2] = -100
+    mask = torch.ones_like(labels)
+    with torch.autocast("cuda", dtype=torch.float16):
+        ref = _ChunkedHeadLoss.apply(x, w, labels, None, mask)
+        got = _HostBackedFullHead.apply(x, w.cpu(), labels, None, mask)
+    dr, = torch.autograd.grad(ref[0] * 65536, x)
+    dg, = torch.autograd.grad(got[0] * 65536, x)
+    for a, b in zip(got, ref):
+        torch.testing.assert_close(a, b, atol=0, rtol=0)
+    torch.testing.assert_close(dg, dr, atol=0, rtol=0)

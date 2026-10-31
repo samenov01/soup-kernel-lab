@@ -8,13 +8,27 @@ the original CUDA device. All transfers take place during the measured run.
 from dataclasses import dataclass
 import torch
 import torch.nn.functional as F
-from .chunked_head import _ACTIVE
+from .chunked_head import _ACTIVE, _ChunkedHeadLoss
 from .streamed_head import StreamedHeadLoss, host_half_weight
 
 # This is storage policy inside our own autograd hooks, not a trainer setting.
 # Only activations that backward really consumes are retained; no reserve or
 # unused allocation is created. Storage aliases are counted once per forward.
 GPU_SAVED_BUDGET = 512 * 2**20
+STREAM_VOCABULARY = False
+
+
+class _HostBackedFullHead(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, hidden, weight, labels, divisor, mask):
+        # Keep only the original Half matmul operand on GPU; the FP32 model
+        # parameter stays on CPU. This retains the original head GEMM shapes.
+        half = host_half_weight(weight).to(hidden.device, non_blocking=True)
+        return _ChunkedHeadLoss.forward(ctx, hidden, half, labels, divisor, mask)
+
+    @staticmethod
+    def backward(ctx, *gradients):
+        return _ChunkedHeadLoss.backward(ctx, *gradients)
 
 
 @dataclass
@@ -70,7 +84,7 @@ def offload_embedding(model):
         raise RuntimeError("Embedding must originate on the configured CUDA device")
     embedding._soup_host_embedding = True
     head._soup_host_head = True
-    head._soup_streamed_loss = StreamedHeadLoss
+    head._soup_streamed_loss = StreamedHeadLoss if STREAM_VOCABULARY else _HostBackedFullHead
     model.model._soup_saved_offload = True
 
 
@@ -84,6 +98,7 @@ def patch_host_offload():
     original_embedding = torch.nn.Embedding.forward
     original_linear = torch.nn.Linear.forward
     original_body = Qwen2Model.forward
+    original_apply = Qwen2ForCausalLM._apply
 
     def prepare(model, *args, **kwargs):
         supported = (type(model) is Qwen2ForCausalLM and getattr(model, "is_loaded_in_4bit", False)
@@ -104,6 +119,18 @@ def patch_host_offload():
         if self.weight.device.type != "cpu":
             raise RuntimeError("Frozen embedding unexpectedly moved from host storage")
         return original_embedding(self, ids.cpu()).to(self._soup_embedding_device, non_blocking=False)
+
+    def apply_model(self, fn, recurse=True):
+        marked = getattr(self.model.embed_tokens, "_soup_host_embedding", False)
+        result = original_apply(self, fn, recurse=recurse)
+        if marked:
+            # Framework model.to(device) can run after PEFT setup. Restore our
+            # storage policy after that ordinary placement, without changing
+            # its requested execution device or training arguments.
+            if self.model.embed_tokens.weight is not self.lm_head.weight:
+                self.tie_weights()
+            offload_embedding(self)
+        return result
 
     def linear(self, x):
         if not getattr(self, "_soup_host_head", False):
@@ -126,3 +153,4 @@ def patch_host_offload():
     torch.nn.Embedding.forward = embedding
     torch.nn.Linear.forward = linear
     Qwen2Model.forward = body
+    Qwen2ForCausalLM._apply = apply_model

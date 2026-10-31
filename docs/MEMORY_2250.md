@@ -41,6 +41,25 @@ LoRA, optimizer, scheduler и флаги Soup сохраняются. Коман
 выделения неиспользуемой памяти; алиасы одного storage считаются один раз.
 Отдельный тест проверяет точный round-trip и размещение при переполнении бюджета.
 
+## Первая ошибка интеграции
+
+Первый запуск прошёл 127 GPU unit-тестов и 79 регрессионных, но обучение
+остановилось до первого шага: после PEFT framework placement снова перенёс
+embedding на CUDA. Наш runtime guard отказал, admission не пройден.
+Наблюдавшиеся до ошибки 1701 MiB не считаются результатом цели.
+[Полный лог и исходные проверки](measurements/host_placement_failure/).
+
+Исправление восстанавливает CPU storage после обычного model.to через
+Qwen2ForCausalLM._apply, сохраняя запрошенную CUDA GPU для остальных слоёв.
+Новый тест выполняет реальное model.to(cuda) после offload и проверяет
+точные значения, tie embedding/head и dtype.
+
+Следующий вариант оставляет полный Half head-операнд на GPU во время
+forward/backward, сохраняя исходные GEMM shapes и FP32 параметр на CPU.
+Это альтернативный баланс с меньшим числом пересылок. Его пик ещё не измерен;
+streamed vocabulary реализация сохранена и отдельно тестируется. Прямой
+unit-тест требует побитового совпадения с предыдущим chunked head.
+
 Источники API и математических идей (код написан самостоятельно):
 [PyTorch saved_tensors_hooks](https://docs.pytorch.org/docs/2.11/autograd.html#torch.autograd.graph.saved_tensors_hooks),
 [PyTorch mm с FP32 output](https://docs.pytorch.org/docs/2.11/generated/torch.mm.html),
