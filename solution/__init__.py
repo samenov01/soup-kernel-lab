@@ -31,6 +31,7 @@ from .nf4_backward import patch_nf4_backward
 from .recomputed_mlp import patch_recomputed_mlp
 from .nf4_scales import patch_nf4_scales
 from .residual_norm import patch_residual_norm
+from .import_metadata import import_trl_with_existing_package_map
 
 _applied = False
 
@@ -39,6 +40,7 @@ def apply():
     global _applied
     if _applied:
         return
+    import_trl_with_existing_package_map()
     patch_qwen2_mlp()  # the example: works out of the box, does not count as your own kernel
     patch_vocab_reductions()
     patch_nf4_dequantization()
