@@ -25,6 +25,7 @@ def test_half_activation_norm_fp32_arithmetic(dtype):
 def test_decoder_half_storage_keeps_parameters_and_head_dtype():
     from types import SimpleNamespace
     from peft import LoraConfig, get_peft_model
+    from bitsandbytes.nn import Linear4bit
     from transformers import Qwen2Config, Qwen2ForCausalLM
     from transformers.models.qwen2 import modeling_qwen2 as qwen
     from solution.half_activations import patch_half_activations
@@ -33,7 +34,20 @@ def test_decoder_half_storage_keeps_parameters_and_head_dtype():
     torch.manual_seed(532)
     model = Qwen2ForCausalLM(Qwen2Config(vocab_size=257, hidden_size=128,
         intermediate_size=256, num_hidden_layers=2, num_attention_heads=4,
-        num_key_value_heads=2, attention_dropout=0.0)).cuda().requires_grad_(False)
+        num_key_value_heads=2, attention_dropout=0.0))
+    for layer in model.model.layers:
+        for parent, names in ((layer.self_attn, ("q_proj", "k_proj", "v_proj", "o_proj")),
+                              (layer.mlp, ("gate_proj", "up_proj", "down_proj"))):
+            for name in names:
+                source = getattr(parent, name)
+                target = Linear4bit(source.in_features, source.out_features,
+                    bias=source.bias is not None, compute_dtype=torch.float16,
+                    quant_type="nf4", compress_statistics=True)
+                target.weight.data.copy_(source.weight)
+                if source.bias is not None: target.bias.data.copy_(source.bias)
+                setattr(parent, name, target)
+    model = model.cuda().requires_grad_(False)
+    model.is_loaded_in_4bit = True
     model = get_peft_model(model, LoraConfig(r=8, lora_alpha=16, lora_dropout=0.,
                                             target_modules=["q_proj", "v_proj"]))
     for name, p in model.named_parameters():
