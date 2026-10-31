@@ -1,0 +1,9 @@
+{
+  "commit": "4ae12d7a2dab282237ddfe2c3b6391954a15bb36",
+  "stage": "complete",
+  "ok": true,
+  "gpus": [
+    "Tesla T4",
+    "Tesla T4"
+  ]
+}
