@@ -15,9 +15,9 @@ from .streamed_head import StreamedHeadLoss
 # This is storage policy inside our own autograd hooks, not a trainer setting.
 # Only activations that backward really consumes are retained; no reserve or
 # unused allocation is created. Storage aliases are counted once per forward.
-GPU_SAVED_BUDGET = 192 * 2**20
+GPU_SAVED_BUDGET = 896 * 2**20
 # Speed candidate: spend VRAM on reusable operands instead of PCIe copies.
-# The external <=2000 MiB peak still needs a complete Kaggle measurement.
+# The external <3000 MiB peak still needs a complete Kaggle measurement.
 STREAM_VOCABULARY = False
 OFFLOAD_MLP = False
 
@@ -83,18 +83,27 @@ def budgeted_packer(budget=GPU_SAVED_BUDGET):
     retained = set()
     offloaded = {}
     used = 0
-    def pack(tensor):
+
+    def try_retain(*tensors):
+        """Atomically reserve real saved storage, shared with ordinary hooks."""
         nonlocal used
+        if any(not t.is_cuda or t.dtype not in (torch.float16, torch.float32, torch.bool)
+               for t in tensors):
+            return False
+        keys = {(t.untyped_storage().data_ptr(), t.untyped_storage().nbytes()) for t in tensors}
+        new = keys - retained
+        extra = sum(size for _, size in new)
+        if used + extra > budget:
+            return False
+        retained.update(new)
+        used += extra
+        return True
+
+    def pack(tensor):
         if (not tensor.is_cuda or tensor.dtype not in (torch.float16, torch.float32, torch.bool)
                 or tensor.numel() * tensor.element_size() < 65536):
             return tensor.detach()
-        storage = tensor.untyped_storage()
-        key = (storage.data_ptr(), storage.nbytes())
-        if key in retained:
-            return tensor.detach()
-        if used + storage.nbytes() <= budget:
-            retained.add(key)
-            used += storage.nbytes()
+        if try_retain(tensor):
             return tensor.detach()
         # The same activation can be saved by several operations. Reuse its
         # host snapshot only for the very same live Tensor and version. Weak
@@ -108,6 +117,7 @@ def budgeted_packer(budget=GPU_SAVED_BUDGET):
         if isinstance(packed, _HostTensor):
             offloaded[key] = (weakref.ref(tensor), tensor._version, packed)
         return packed
+    pack.try_retain = try_retain
     return pack
 
 
@@ -195,8 +205,14 @@ def patch_host_offload():
     def body(self, *args, **kwargs):
         if not (getattr(self, "_soup_saved_offload", False) and self.training and _ACTIVE.get()):
             return original_body(self, *args, **kwargs)
-        with torch.autograd.graph.saved_tensors_hooks(budgeted_packer(), unpack_activation):
-            return original_body(self, *args, **kwargs)
+        from .recomputed_mlp import _MLP_RETENTION
+        pack = budgeted_packer()
+        token = _MLP_RETENTION.set(pack.try_retain)
+        try:
+            with torch.autograd.graph.saved_tensors_hooks(pack, unpack_activation):
+                return original_body(self, *args, **kwargs)
+        finally:
+            _MLP_RETENTION.reset(token)
 
     prepare._soup_host_offload = True
     peft.prepare_model_for_kbit_training = prepare

@@ -1,4 +1,4 @@
-"""Frozen MLP autograd saving its narrow input, not two wide activations.
+"""Frozen MLP autograd with bounded retention or deterministic recomputation.
 
 Only deterministic frozen gate/up products are recomputed. No dropout, RNG,
 trainer checkpointing flag or model parameter is changed. The organizer's
@@ -6,6 +6,7 @@ SwiGLU kernels are used unchanged and remain excluded from own-kernel credit.
 """
 
 from copy import copy
+from contextvars import ContextVar
 import torch
 import torch.nn.functional as F
 import triton
@@ -15,6 +16,10 @@ from .merged_gate_up import packed_gate_up
 from .half_activations import _HALF_MODEL
 from .projection_io import _gather, _scatter
 from .host_storage import device_operands
+
+# A per-forward storage reservation callback, not a trainer flag. None means
+# the original recomputation path; it never depends on tests or measurement.
+_MLP_RETENTION = ContextVar("soup_mlp_retention", default=None)
 
 
 def _decode(packed, state, device=None):
@@ -49,10 +54,16 @@ class _RecomputedMLP(torch.autograd.Function):
         activation = torch.empty_like(gate)
         example_swiglu_fwd_kernel[(triton.cdiv(gate.numel(), BLOCK),)](
             gate, up, activation, gate.numel(), BLOCK=BLOCK)
-        del gate, up
+        reserve = _MLP_RETENTION.get()
+        keep = reserve is not None and reserve(gate, up)
+        if not keep:
+            gate = up = None
         resident, resident_state = device_operands(down, down_state, x.device)
         out = bnb.matmul_4bit(activation, resident, resident_state)
-        ctx.save_for_backward(x, packed, down, indices, inverse)
+        # Retained activations replace x: backward no longer needs its value
+        # when gate/up are available. All storage uses the same global budget
+        # for this forward; there is no per-layer reserve or hidden allocation.
+        ctx.save_for_backward(None if keep else x, packed, down, indices, inverse, gate, up)
         ctx.states = state, down_state
         return (_scatter(out, inverse, ctx.shape, x.dtype) if indices is not None
                 else out.view(ctx.shape))
@@ -61,20 +72,22 @@ class _RecomputedMLP(torch.autograd.Function):
     @once_differentiable
     def backward(ctx, grad):
         import bitsandbytes as bnb
-        x, packed, down, indices, inverse = ctx.saved_tensors
+        x, packed, down, indices, inverse, gate, up = ctx.saved_tensors
         state, down_state = ctx.states
         grad = (_gather(grad, indices, torch.float16) if indices is not None
                 else grad.reshape(-1, grad.shape[-1]))
         # Explicit half operands also preserve the configured AMP boundaries
         # when autograd executes outside the forward's autocast context.
         da = torch.matmul(grad, _decode(down, down_state, grad.device))
-        resident, resident_state = device_operands(packed, state, x.device)
-        dense = _decode(resident, resident_state) if _reuse_dense_backward(x) else None
-        # Retain this one-layer operand only until dx, not across layers or
-        # steps. Its values/dtype and linear shape match the existing fallback.
-        merged = F.linear(x, dense) if dense is not None else bnb.matmul_4bit(x, resident, resident_state)
-        gate, up = (part.contiguous() for part in merged.chunk(2, -1))
-        del merged
+        resident, resident_state = device_operands(packed, state, grad.device)
+        if gate is None:
+            dense = _decode(resident, resident_state) if _reuse_dense_backward(x) else None
+            # Reuse one-layer dequantized storage, never a cross-step cache.
+            merged = F.linear(x, dense) if dense is not None else bnb.matmul_4bit(x, resident, resident_state)
+            gate, up = (part.contiguous() for part in merged.chunk(2, -1))
+            del merged
+        else:
+            dense = None
         dgate, dup = torch.empty_like(gate), torch.empty_like(up)
         example_swiglu_bwd_kernel[(triton.cdiv(gate.numel(), BLOCK),)](
             da.contiguous(), gate, up, dgate, dup, gate.numel(), BLOCK=BLOCK)
@@ -83,7 +96,7 @@ class _RecomputedMLP(torch.autograd.Function):
         del dgate, dup
         dx = torch.matmul(combined, dense if dense is not None else _decode(resident, resident_state))
         del dense
-        dx = (_scatter(dx, inverse, ctx.shape, x.dtype) if indices is not None else dx.view(ctx.shape))
+        dx = (_scatter(dx, inverse, ctx.shape, grad.dtype) if indices is not None else dx.view(ctx.shape))
         return (dx, None, None, None, None, None, None)[:ctx.nargs]
 
 

@@ -17,7 +17,7 @@ from .vocab import (_partials, vocab_ce_finish_kernel, vocab_ce_backward_kernel,
                     vocab_entropy_finish_kernel, TILE)
 
 _ACTIVE = ContextVar("soup_chunked_training_head", default=False)
-CHUNK = 256
+CHUNK = 512
 
 
 class _ChunkedHeadLoss(torch.autograd.Function):

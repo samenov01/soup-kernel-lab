@@ -12,7 +12,7 @@ from solution.chunked_head import _ChunkedHeadLoss, patch_chunked_head
 pytestmark = pytest.mark.skipif(not torch.cuda.is_available(), reason="needs CUDA")
 
 
-@pytest.mark.parametrize("shape,width,vocab", [((2, 7), 64, 257), ((2, 257), 128, 4097), ((1, 9), 128, 151936)])
+@pytest.mark.parametrize("shape,width,vocab", [((2, 7), 64, 257), ((2, 257), 128, 4097), ((1, 9), 128, 151936), ((1, 513), 128, 151936)])
 @pytest.mark.parametrize("scale", [1.0, 65536.0])
 def test_chunk_loss_gradient_and_metrics(shape, width, vocab, scale):
     torch.manual_seed(83)

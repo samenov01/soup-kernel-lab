@@ -63,6 +63,19 @@ def test_activation_budget_keeps_used_storage_and_offloads_overflow():
     torch.testing.assert_close(unpack_activation(offloaded), y, atol=0, rtol=0)
 
 
+def test_activation_reservation_is_atomic_and_counts_shared_storage_once():
+    from solution.host_offload import budgeted_packer, _HostTensor
+    x = torch.randn(256, 128, device="cuda")
+    y = torch.randn_like(x)
+    n = x.untyped_storage().nbytes()
+    pack = budgeted_packer(n)
+    assert not pack.try_retain(x, y)  # A rejected pair consumes no budget.
+    assert pack.try_retain(x, x.view(128, 256))
+    assert pack(x).is_cuda
+    assert not pack.try_retain(y)
+    assert isinstance(pack(y), _HostTensor)
+
+
 def test_host_tied_embedding_identity_dtype_and_values():
     from transformers import Qwen2Config, Qwen2ForCausalLM
     from solution.host_offload import patch_host_offload, offload_embedding
