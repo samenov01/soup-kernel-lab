@@ -11,6 +11,11 @@ import torch.nn.functional as F
 from .chunked_head import _ACTIVE
 from .streamed_head import StreamedHeadLoss, host_half_weight
 
+# This is storage policy inside our own autograd hooks, not a trainer setting.
+# Only activations that backward really consumes are retained; no reserve or
+# unused allocation is created. Storage aliases are counted once per forward.
+GPU_SAVED_BUDGET = 512 * 2**20
+
 
 @dataclass
 class _HostTensor:
@@ -31,6 +36,25 @@ def unpack_activation(packed):
     if not isinstance(packed, _HostTensor):
         return packed
     return packed.value.to(packed.device, non_blocking=True)
+
+
+def budgeted_packer(budget=GPU_SAVED_BUDGET):
+    retained = set()
+    used = 0
+    def pack(tensor):
+        nonlocal used
+        if (tensor.is_cuda and tensor.dtype in (torch.float16, torch.float32, torch.bool)
+                and tensor.numel() * tensor.element_size() >= 65536):
+            storage = tensor.untyped_storage()
+            key = (storage.data_ptr(), storage.nbytes())
+            if key in retained:
+                return tensor.detach()
+            if used + storage.nbytes() <= budget:
+                retained.add(key)
+                used += storage.nbytes()
+                return tensor.detach()
+        return pack_activation(tensor)
+    return pack
 
 
 def offload_embedding(model):
@@ -93,7 +117,7 @@ def patch_host_offload():
     def body(self, *args, **kwargs):
         if not (getattr(self, "_soup_saved_offload", False) and self.training and _ACTIVE.get()):
             return original_body(self, *args, **kwargs)
-        with torch.autograd.graph.saved_tensors_hooks(pack_activation, unpack_activation):
+        with torch.autograd.graph.saved_tensors_hooks(budgeted_packer(), unpack_activation):
             return original_body(self, *args, **kwargs)
 
     prepare._soup_host_offload = True

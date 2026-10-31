@@ -51,6 +51,18 @@ def test_host_activation_exact_values_and_backward():
     assert any(isinstance(t, _HostTensor) and t.value.device.type == "cpu" for t in seen)
 
 
+def test_activation_budget_keeps_used_storage_and_offloads_overflow():
+    from solution.host_offload import budgeted_packer, unpack_activation, _HostTensor
+    x = torch.randn(256, 128, device="cuda")
+    y = torch.randn_like(x)
+    pack = budgeted_packer(x.untyped_storage().nbytes())
+    kept = pack(x)
+    alias = pack(x.view(128, 256))
+    offloaded = pack(y)
+    assert kept.is_cuda and alias.is_cuda and isinstance(offloaded, _HostTensor)
+    torch.testing.assert_close(unpack_activation(offloaded), y, atol=0, rtol=0)
+
+
 def test_host_tied_embedding_identity_dtype_and_values():
     from transformers import Qwen2Config, Qwen2ForCausalLM
     from solution.host_offload import patch_host_offload, offload_embedding
