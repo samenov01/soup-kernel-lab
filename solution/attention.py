@@ -14,7 +14,7 @@ from torch.autograd.function import once_differentiable
 
 @triton.jit
 def causal_gqa_forward_kernel(Q, K, V, MASK, O, STATS, END,
-        H: tl.constexpr, KV: tl.constexpr, L: tl.constexpr, D: tl.constexpr,
+        H: tl.constexpr, KV: tl.constexpr, L, D: tl.constexpr,
         SCALE: tl.constexpr, BLOCK: tl.constexpr):
     tile, head, batch = tl.program_id(0), tl.program_id(1), tl.program_id(2)
     rows = tile * BLOCK + tl.arange(0, BLOCK)
@@ -63,7 +63,7 @@ def causal_gqa_delta_kernel(O, DO, DELTA, ROWS, D: tl.constexpr):
 
 @triton.jit
 def causal_gqa_query_gradient_kernel(Q, K, V, DO, MASK, STATS, DELTA, DQ, END,
-        H: tl.constexpr, KV: tl.constexpr, L: tl.constexpr, D: tl.constexpr,
+        H: tl.constexpr, KV: tl.constexpr, L, D: tl.constexpr,
         SCALE: tl.constexpr, BLOCK: tl.constexpr):
     tile, head, batch = tl.program_id(0), tl.program_id(1), tl.program_id(2)
     rows = tile * BLOCK + tl.arange(0, BLOCK)
@@ -97,7 +97,7 @@ def causal_gqa_query_gradient_kernel(Q, K, V, DO, MASK, STATS, DELTA, DQ, END,
 
 @triton.jit
 def causal_gqa_key_value_gradient_kernel(Q, K, V, DO, MASK, STATS, DELTA, DK, DV, END,
-        H: tl.constexpr, KV: tl.constexpr, L: tl.constexpr, D: tl.constexpr,
+        H: tl.constexpr, KV: tl.constexpr, L, D: tl.constexpr,
         SCALE: tl.constexpr, BLOCK: tl.constexpr):
     tile, head, batch = tl.program_id(0), tl.program_id(1), tl.program_id(2)
     keys = tile * BLOCK + tl.arange(0, BLOCK)

@@ -7,16 +7,15 @@ from torch.autograd.function import once_differentiable
 
 
 @triton.jit
-def rope_transform_kernel(X, COS, SIN, OUT, TOTAL, HEADS: tl.constexpr,
-        LENGTH: tl.constexpr, DIM: tl.constexpr, S0: tl.constexpr, S1: tl.constexpr,
-        S2: tl.constexpr, C0: tl.constexpr, C1: tl.constexpr, C2: tl.constexpr,
+def rope_transform_kernel(X, COS, SIN, OUT, LENGTH, HEADS: tl.constexpr,
+        DIM: tl.constexpr, S0, S1, S2, C0, C1, C2,
         BACKWARD: tl.constexpr, TILE: tl.constexpr):
     idx = tl.program_id(0) * TILE + tl.arange(0, TILE)
-    live = idx < TOTAL
+    live = idx < LENGTH * DIM
     d = idx % DIM
-    t = idx // DIM % LENGTH
-    h = idx // (DIM * LENGTH) % HEADS
-    b = idx // (DIM * LENGTH * HEADS)
+    t = idx // DIM
+    h = tl.program_id(1)
+    b = tl.program_id(2)
     other_d = tl.where(d < DIM // 2, d + DIM // 2, d - DIM // 2)
     base = b * S0 + h * S1 + t * S2
     a = tl.load(X + base + d, live, other=0)
@@ -28,7 +27,8 @@ def rope_transform_kernel(X, COS, SIN, OUT, TOTAL, HEADS: tl.constexpr,
     else:
         s = tl.load(SIN + b * C0 + t * C1 + d * C2, live, other=0)
         sign = tl.where(d < DIM // 2, -1., 1.)
-    tl.store(OUT + idx, a * c + (paired * sign) * s, live)
+    offset = (b * HEADS + h) * LENGTH * DIM + idx
+    tl.store(OUT + offset, a * c + (paired * sign) * s, live)
 
 
 def _transform(x, cos, sin, backward):
@@ -36,8 +36,8 @@ def _transform(x, cos, sin, backward):
         x = x.contiguous()
     out = torch.empty(x.shape, device=x.device, dtype=x.dtype)
     c0 = 0 if cos.shape[0] == 1 else cos.stride(0)
-    rope_transform_kernel[(triton.cdiv(x.numel(), 512),)](
-        x, cos, sin, out, x.numel(), x.shape[1], x.shape[2], x.shape[3],
+    rope_transform_kernel[(triton.cdiv(x.shape[2] * x.shape[3], 512), x.shape[1], x.shape[0])](
+        x, cos, sin, out, x.shape[2], x.shape[1], x.shape[3],
         *x.stride()[:3], c0, cos.stride(1), cos.stride(2), backward, 512,
         num_warps=4, enable_fp_fusion=False)
     return out
