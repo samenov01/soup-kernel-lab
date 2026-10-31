@@ -1,0 +1,75 @@
+...................F.................................................... [ 72%]
+............................                                             [100%]
+=================================== FAILURES ===================================
+__________ test_decoder_half_storage_keeps_parameters_and_head_dtype ___________
+
+    def test_decoder_half_storage_keeps_parameters_and_head_dtype():
+        from types import SimpleNamespace
+        from peft import LoraConfig, get_peft_model
+        from transformers import Qwen2Config, Qwen2ForCausalLM
+        from transformers.models.qwen2 import modeling_qwen2 as qwen
+        from solution.half_activations import patch_half_activations
+        from solution.chunked_head import _ACTIVE
+    
+        torch.manual_seed(532)
+        model = Qwen2ForCausalLM(Qwen2Config(vocab_size=257, hidden_size=128,
+            intermediate_size=256, num_hidden_layers=2, num_attention_heads=4,
+            num_key_value_heads=2, attention_dropout=0.0)).cuda().requires_grad_(False)
+>       model = get_peft_model(model, LoraConfig(r=8, lora_alpha=16, lora_dropout=0.,
+                                                target_modules=["q_proj", "v_proj"]))
+
+solution/test_half_activations.py:37: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.13/dist-packages/peft/mapping_func.py:114: in get_peft_model
+    return PeftModel(
+/usr/local/lib/python3.13/dist-packages/peft/peft_model.py:164: in __init__
+    self.base_model = cls(model, {adapter_name: peft_config}, adapter_name)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.13/dist-packages/peft/tuners/tuners_utils.py:318: in __init__
+    self.inject_adapter(self.model, adapter_name, low_cpu_mem_usage=low_cpu_mem_usage, state_dict=state_dict)
+/usr/local/lib/python3.13/dist-packages/peft/tuners/tuners_utils.py:917: in inject_adapter
+    self._create_and_replace(
+/usr/local/lib/python3.13/dist-packages/peft/tuners/lora/model.py:281: in _create_and_replace
+    new_module = self._create_new_module(lora_config, adapter_name, target, device_map=device_map, **kwargs)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.13/dist-packages/peft/tuners/lora/model.py:430: in _create_new_module
+    new_module = dispatcher(target, adapter_name, config=lora_config, **kwargs)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.13/dist-packages/peft/tuners/lora/torchao.py:160: in dispatch_torchao
+    if not is_torchao_available():
+           ^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    @lru_cache
+    def is_torchao_available() -> bool:
+        if importlib.util.find_spec("torchao") is None:
+            return False
+    
+        TORCHAO_MINIMUM_VERSION = packaging.version.parse("0.16.0")
+        try:
+            torchao_version = packaging.version.parse(importlib_metadata.version("torchao"))
+        except importlib_metadata.PackageNotFoundError:
+            # Same idea as in diffusers:
+            # https://github.com/huggingface/diffusers/blob/9f06a0d1a4a998ac6a463c5be728c892f95320a8/src/diffusers/utils/import_utils.py#L351-L357
+            # It's not clear under what circumstances `importlib_metadata.version("torchao")` can raise an error even
+            # though `importlib.util.find_spec("torchao") is not None` but it has been observed, so adding this for
+            # precaution.
+            return False
+    
+        if torchao_version < TORCHAO_MINIMUM_VERSION:
+>           raise ImportError(
+                f"Found an incompatible version of torchao. Found version {torchao_version}, "
+                f"but only versions above {TORCHAO_MINIMUM_VERSION} are supported"
+            )
+E           ImportError: Found an incompatible version of torchao. Found version 0.10.0, but only versions above 0.16.0 are supported
+
+/usr/local/lib/python3.13/dist-packages/peft/import_utils.py:147: ImportError
+=============================== warnings summary ===============================
+solution/test_chunked_head.py: 14 warnings
+  /usr/local/lib/python3.13/dist-packages/torch/jit/_script.py:365: DeprecationWarning: `torch.jit.script_method` is deprecated. Please switch to `torch.compile` or `torch.export`.
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED solution/test_half_activations.py::test_decoder_half_storage_keeps_parameters_and_head_dtype
+1 failed, 99 passed, 14 warnings in 63.10s (0:01:03)

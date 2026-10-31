@@ -1,0 +1,10 @@
+{
+  "commit": "1357b0d467c3fd28a9bd6e37ae8758ce9d314990",
+  "stage": "pytest_solution",
+  "ok": false,
+  "gpus": [
+    "Tesla T4",
+    "Tesla T4"
+  ],
+  "error": "pytest_solution failed (exit 1); see pytest_solution.log"
+}
