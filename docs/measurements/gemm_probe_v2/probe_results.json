@@ -1,0 +1,254 @@
+[
+  {
+    "implementation": "vector-scale-coalesced",
+    "shape": [
+      512,
+      8960,
+      1536
+    ],
+    "tile": [
+      32,
+      64,
+      64
+    ],
+    "baseline_ms": 0.9075349171956381,
+    "ok": true,
+    "candidate_ms": 18.392812093098957,
+    "speedup": 0.04934182508916883,
+    "max_abs_error": 0.001953125,
+    "registers": 255,
+    "spills": 82,
+    "shared_bytes": 16384
+  },
+  {
+    "implementation": "vector-scale-coalesced",
+    "shape": [
+      512,
+      8960,
+      1536
+    ],
+    "tile": [
+      64,
+      64,
+      32
+    ],
+    "baseline_ms": 0.9075349171956381,
+    "ok": true,
+    "candidate_ms": 10.656289672851562,
+    "speedup": 0.08516424994599334,
+    "max_abs_error": 0.001953125,
+    "registers": 255,
+    "spills": 76,
+    "shared_bytes": 8192
+  },
+  {
+    "implementation": "vector-scale-coalesced",
+    "shape": [
+      512,
+      8960,
+      1536
+    ],
+    "tile": [
+      64,
+      128,
+      32
+    ],
+    "baseline_ms": 0.9075349171956381,
+    "ok": true,
+    "candidate_ms": 148.439990234375,
+    "speedup": 0.006113816874837517,
+    "max_abs_error": 0.001953125,
+    "registers": 64,
+    "spills": 1086,
+    "shared_bytes": 16384
+  },
+  {
+    "implementation": "vector-scale-coalesced",
+    "shape": [
+      2048,
+      8960,
+      1536
+    ],
+    "tile": [
+      32,
+      64,
+      64
+    ],
+    "baseline_ms": 1.5504063924153646,
+    "ok": true,
+    "candidate_ms": 60.4878173828125,
+    "speedup": 0.02563171328539141,
+    "max_abs_error": 0.001953125,
+    "registers": 255,
+    "spills": 82,
+    "shared_bytes": 16384
+  },
+  {
+    "implementation": "vector-scale-coalesced",
+    "shape": [
+      2048,
+      8960,
+      1536
+    ],
+    "tile": [
+      64,
+      64,
+      32
+    ],
+    "baseline_ms": 1.5504063924153646,
+    "ok": true,
+    "candidate_ms": 44.14259033203125,
+    "speedup": 0.035122687199675755,
+    "max_abs_error": 0.001953125,
+    "registers": 255,
+    "spills": 76,
+    "shared_bytes": 8192
+  },
+  {
+    "implementation": "vector-scale-coalesced",
+    "shape": [
+      2048,
+      8960,
+      1536
+    ],
+    "tile": [
+      64,
+      128,
+      32
+    ],
+    "baseline_ms": 1.5504063924153646,
+    "ok": true,
+    "candidate_ms": 596.737890625,
+    "speedup": 0.0025981363288185527,
+    "max_abs_error": 0.001953125,
+    "registers": 64,
+    "spills": 1086,
+    "shared_bytes": 16384
+  },
+  {
+    "implementation": "vector-scale-coalesced",
+    "shape": [
+      512,
+      1536,
+      8960
+    ],
+    "tile": [
+      32,
+      64,
+      64
+    ],
+    "baseline_ms": 0.5249706586201985,
+    "ok": true,
+    "candidate_ms": 15.832213338216146,
+    "speedup": 0.03315838710643273,
+    "max_abs_error": 0.0078125,
+    "registers": 255,
+    "spills": 82,
+    "shared_bytes": 16384
+  },
+  {
+    "implementation": "vector-scale-coalesced",
+    "shape": [
+      512,
+      1536,
+      8960
+    ],
+    "tile": [
+      64,
+      64,
+      32
+    ],
+    "baseline_ms": 0.5249706586201985,
+    "ok": true,
+    "candidate_ms": 11.164545694986979,
+    "speedup": 0.04702122889388298,
+    "max_abs_error": 0.0078125,
+    "registers": 255,
+    "spills": 76,
+    "shared_bytes": 8192
+  },
+  {
+    "implementation": "vector-scale-coalesced",
+    "shape": [
+      512,
+      1536,
+      8960
+    ],
+    "tile": [
+      64,
+      128,
+      32
+    ],
+    "baseline_ms": 0.5249706586201985,
+    "ok": true,
+    "candidate_ms": 138.01248372395833,
+    "speedup": 0.0038037911097245623,
+    "max_abs_error": 0.0078125,
+    "registers": 64,
+    "spills": 1086,
+    "shared_bytes": 16384
+  },
+  {
+    "implementation": "vector-scale-coalesced",
+    "shape": [
+      2048,
+      1536,
+      8960
+    ],
+    "tile": [
+      32,
+      64,
+      64
+    ],
+    "baseline_ms": 1.6020821889241537,
+    "ok": true,
+    "candidate_ms": 63.47325439453125,
+    "speedup": 0.025240271736597555,
+    "max_abs_error": 0.0078125,
+    "registers": 255,
+    "spills": 82,
+    "shared_bytes": 16384
+  },
+  {
+    "implementation": "vector-scale-coalesced",
+    "shape": [
+      2048,
+      1536,
+      8960
+    ],
+    "tile": [
+      64,
+      64,
+      32
+    ],
+    "baseline_ms": 1.6020821889241537,
+    "ok": true,
+    "candidate_ms": 47.0936279296875,
+    "speedup": 0.03401908621939513,
+    "max_abs_error": 0.0078125,
+    "registers": 255,
+    "spills": 76,
+    "shared_bytes": 8192
+  },
+  {
+    "implementation": "vector-scale-coalesced",
+    "shape": [
+      2048,
+      1536,
+      8960
+    ],
+    "tile": [
+      64,
+      128,
+      32
+    ],
+    "baseline_ms": 1.6020821889241537,
+    "ok": true,
+    "candidate_ms": 587.9200520833333,
+    "speedup": 0.0027250000799378593,
+    "max_abs_error": 0.0078125,
+    "registers": 64,
+    "spills": 1086,
+    "shared_bytes": 16384
+  }
+]
