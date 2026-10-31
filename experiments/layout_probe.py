@@ -26,15 +26,18 @@ def main():
             a = torch.randn(rows, inner, device="cuda", dtype=torch.float16) * 0.01
             w = torch.randn(inner, output, device="cuda", dtype=torch.float16) * 0.01
             wt = w.T.contiguous()
+            column_out = torch.empty(output, rows, device="cuda", dtype=torch.float16).T
             ref = torch.matmul(a, w)
             alt = torch.nn.functional.linear(a, wt)
             diff = (ref.float() - alt.float()).abs().max().item()
             record = {"m": rows, "k": inner, "n": output, "max_abs_diff": diff,
                       "nn_ms": timing(lambda: torch.matmul(a, w)),
-                      "tn_ms": timing(lambda: torch.nn.functional.linear(a, wt))}
+                      "tn_ms": timing(lambda: torch.nn.functional.linear(a, wt)),
+                      "flipped_ms": timing(lambda: torch.matmul(w.T, a.T).T),
+                      "column_out_ms": timing(lambda: torch.matmul(a, w, out=column_out))}
             result["rows"].append(record)
             print(json.dumps(record), flush=True)
-            del a, w, wt, ref, alt
+            del a, w, wt, ref, alt, column_out
     command = [sys.executable, "-X", "importtime", "-c",
                "import torch; torch.empty(1,device='cuda'); import transformers; import solution; solution.apply()"]
     imports = subprocess.run(command, text=True, capture_output=True, check=True)
