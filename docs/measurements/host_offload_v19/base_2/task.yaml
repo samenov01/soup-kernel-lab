@@ -1,0 +1,21 @@
+base: Qwen/Qwen2.5-1.5B-Instruct
+task: sft
+data:
+  train: /kaggle/working/repo/data/train.jsonl
+  format: alpaca
+  val_split: 0.0
+  max_length: 512
+training:
+  epochs: 1
+  lr: 0.0002
+  batch_size: 4
+  gradient_accumulation_steps: 1
+  seed: 1
+  logging_steps: 1
+  save_steps: 1000
+  lora:
+    r: 16
+    alpha: 32
+    target_modules: auto
+  quantization: 4bit
+output: /kaggle/working/repo/runs/base_2/adapter
