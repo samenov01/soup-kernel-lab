@@ -1,0 +1,2 @@
+speedup 1.326x (counts as 1.326), memory base/solution 3.596x (counts as 3.596), eval loss vs base -0.009 %, all checks passed on this result: True
+Speed and memory points depend on the best admitted team: 35 * ln(s) / ln(best s) and 30 * ln(m) / ln(best m).

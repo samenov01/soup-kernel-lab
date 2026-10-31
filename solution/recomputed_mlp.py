@@ -14,6 +14,10 @@ from .merged_gate_up import packed_gate_up
 from .half_activations import _HALF_MODEL
 from .projection_io import _gather, _scatter
 
+# Retain the two wide half activations on alternating layers. The other half
+# recomputes them; both paths use identical arithmetic and original batches.
+RECOMPUTE_EVERY_LAYER = False
+
 
 def _decode(packed, state):
     from bitsandbytes.functional import dequantize_4bit
@@ -82,6 +86,8 @@ def patch_recomputed_mlp():
                     and p.bias is None and getattr(p.weight, "quant_state", None) is not None
                     and not any(w.requires_grad for w in p.parameters()) for p in layers)):
             return original(self, x)
+        if not RECOMPUTE_EVERY_LAYER and getattr(self, "_soup_layer_index", 0) % 2:
+            return original(self, x)
         # Respect the earlier pointwise padding compaction wrapper. This new
         # wrapper sees full inputs, and performs the same gather/scatter once.
         from .padded_mlp import _TOKENS
@@ -107,3 +113,11 @@ def patch_recomputed_mlp():
 
     forward._soup_recomputed_mlp = True
     Qwen2MLP.forward = forward
+    from transformers.models.qwen2.modeling_qwen2 import Qwen2DecoderLayer
+    original_init = Qwen2DecoderLayer.__init__
+
+    def initialize(self, config, layer_idx):
+        original_init(self, config, layer_idx)
+        self.mlp._soup_layer_index = layer_idx
+
+    Qwen2DecoderLayer.__init__ = initialize
