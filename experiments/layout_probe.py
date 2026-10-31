@@ -19,6 +19,10 @@ def timing(fn, repeats=25):
 
 
 def main():
+    tests = subprocess.run([sys.executable, "-m", "pytest", "solution", "-q"],
+                           text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    print(tests.stdout, flush=True)
+    tests.check_returncode()
     torch.manual_seed(18)
     result = {"device": torch.cuda.get_device_name(), "diagnostic_only": True, "rows": []}
     for rows in (512, 1024, 1536):
@@ -35,6 +39,18 @@ def main():
                       "tn_ms": timing(lambda: torch.nn.functional.linear(a, wt)),
                       "flipped_ms": timing(lambda: torch.matmul(w.T, a.T).T),
                       "column_out_ms": timing(lambda: torch.matmul(a, w, out=column_out))}
+            backend = torch.backends.cuda.preferred_blas_library()
+            try:
+                torch.backends.cuda.preferred_blas_library("cublaslt")
+                alternate = torch.matmul(a, w)
+                record["lt_max_abs_diff"] = (ref.float() - alternate.float()).abs().max().item()
+                record["lt_nn_ms"] = timing(lambda: torch.matmul(a, w))
+                record["lt_tn_ms"] = timing(lambda: torch.nn.functional.linear(a, wt))
+                del alternate
+            except RuntimeError as exc:
+                record["lt_error"] = str(exc)
+            finally:
+                torch.backends.cuda.preferred_blas_library(backend)
             result["rows"].append(record)
             print(json.dumps(record), flush=True)
             del a, w, wt, ref, alt, column_out
