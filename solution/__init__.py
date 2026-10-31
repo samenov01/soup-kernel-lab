@@ -22,6 +22,7 @@ from .chunked_head import patch_chunked_head
 from .padded_mlp import patch_padded_mlp
 from .padded_attention import patch_padded_attention
 from .rope import patch_rope
+from .attention import patch_causal_gqa
 
 _applied = False
 
@@ -39,4 +40,5 @@ def apply():
     patch_padded_mlp()
     patch_padded_attention()
     patch_rope()
+    patch_causal_gqa()
     _applied = True
