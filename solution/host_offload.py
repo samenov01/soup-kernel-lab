@@ -15,7 +15,7 @@ from .streamed_head import StreamedHeadLoss
 # This is storage policy inside our own autograd hooks, not a trainer setting.
 # Only activations that backward really consumes are retained; no reserve or
 # unused allocation is created. Storage aliases are counted once per forward.
-GPU_SAVED_BUDGET = 64 * 2**20
+GPU_SAVED_BUDGET = 192 * 2**20
 # Speed candidate: spend VRAM on reusable operands instead of PCIe copies.
 # The external <=2000 MiB peak still needs a complete Kaggle measurement.
 STREAM_VOCABULARY = False

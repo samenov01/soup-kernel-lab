@@ -7,6 +7,7 @@ SwiGLU kernels are used unchanged and remain excluded from own-kernel credit.
 
 from copy import copy
 import torch
+import torch.nn.functional as F
 import triton
 from torch.autograd.function import once_differentiable
 from .swiglu import BLOCK, example_swiglu_fwd_kernel, example_swiglu_bwd_kernel
@@ -25,6 +26,12 @@ def _decode(packed, state, device=None):
     state = copy(state)
     state.dtype = torch.float16
     return dequantize_4bit(packed, state)
+
+
+def _reuse_dense_backward(x):
+    # bitsandbytes 0.50.2's sm75 path already chooses dequantize + F.linear
+    # above 512 rows. Preserve its custom small-M path and other devices.
+    return x.shape[0] > 512 and torch.cuda.get_device_capability(x.device) == (7, 5)
 
 
 class _RecomputedMLP(torch.autograd.Function):
@@ -62,7 +69,10 @@ class _RecomputedMLP(torch.autograd.Function):
         # when autograd executes outside the forward's autocast context.
         da = torch.matmul(grad, _decode(down, down_state, grad.device))
         resident, resident_state = device_operands(packed, state, x.device)
-        merged = bnb.matmul_4bit(x, resident, resident_state)
+        dense = _decode(resident, resident_state) if _reuse_dense_backward(x) else None
+        # Retain this one-layer operand only until dx, not across layers or
+        # steps. Its values/dtype and linear shape match the existing fallback.
+        merged = F.linear(x, dense) if dense is not None else bnb.matmul_4bit(x, resident, resident_state)
         gate, up = (part.contiguous() for part in merged.chunk(2, -1))
         del merged
         dgate, dup = torch.empty_like(gate), torch.empty_like(up)
@@ -71,7 +81,8 @@ class _RecomputedMLP(torch.autograd.Function):
         del da, gate, up
         combined = torch.cat((dgate, dup), -1)
         del dgate, dup
-        dx = torch.matmul(combined, _decode(resident, resident_state))
+        dx = torch.matmul(combined, dense if dense is not None else _decode(resident, resident_state))
+        del dense
         dx = (_scatter(dx, inverse, ctx.shape, x.dtype) if indices is not None else dx.view(ctx.shape))
         return (dx, None, None, None, None, None, None)[:ctx.nargs]
 
