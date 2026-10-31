@@ -49,7 +49,7 @@ try:
     run("pytest_solution", [sys.executable, "-m", "pytest", "solution", "-q"], cwd=REPO)
     run("pytest_regression", [sys.executable, "-m", "pytest", "tests", "-q"],
         cwd=REPO, env=dict(os.environ, SOUP_APPLY_SOLUTION="1"))
-    run("training", [sys.executable, "harness/run_task.py", "--repeats", "2",
+    run("training", [sys.executable, "harness/run_task.py", "--repeats", str(CONFIG.get("repeats", 2)),
         "--profile", "--out", str(RESULTS)], cwd=REPO)
     run("checks", [sys.executable, "harness/check_rules.py", "--result",
         str(RESULTS / "result.json")], cwd=REPO)

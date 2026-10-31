@@ -17,6 +17,7 @@ from .swiglu import patch_qwen2_mlp
 from .vocab import patch_vocab_reductions
 from .nf4 import patch_nf4_dequantization
 from .rmsnorm import patch_qwen2_rmsnorm
+from .compact_mlp import patch_compact_mlp
 
 _applied = False
 
@@ -29,4 +30,5 @@ def apply():
     patch_vocab_reductions()
     patch_nf4_dequantization()
     patch_qwen2_rmsnorm()
+    patch_compact_mlp()
     _applied = True
