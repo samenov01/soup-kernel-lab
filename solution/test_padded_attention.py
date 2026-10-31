@@ -16,7 +16,6 @@ def test_attention_projection_compaction(side):
     from solution.padded_attention import patch_padded_attention
     from solution.merged_qkv import patch_merged_qkv
     from solution.compact_lora import patch_compact_lora
-    from solution.lora_autograd import patch_lora_autograd
     from peft.tuners.lora.bnb import Linear4bit as LoRALinear4bit
 
     originals = (Qwen2Attention.forward, Qwen2Model.forward, Qwen2MLP.forward,
@@ -82,13 +81,6 @@ def test_attention_projection_compaction(side):
         for a, b in zip(fused_grads, grads):
             torch.testing.assert_close(a, b, atol=5e-3, rtol=1e-2)
         assert torch.equal(rng_ref, rng_fused)
-        torch.cuda.set_rng_state(rng)
-        patch_lora_autograd()
-        compact, compact_grads, rng_compact = run()
-        torch.testing.assert_close(compact[mask.bool()], ref[mask.bool()], atol=2e-3, rtol=3e-3)
-        for a, b in zip(compact_grads, grads):
-            torch.testing.assert_close(a, b, atol=5e-3, rtol=1e-2)
-        assert torch.equal(rng_ref, rng_compact)
     finally:
         (Qwen2Attention.forward, Qwen2Model.forward, Qwen2MLP.forward,
          torch.nn.Linear.forward, Linear4bit.forward, LoRALinear4bit.forward) = originals

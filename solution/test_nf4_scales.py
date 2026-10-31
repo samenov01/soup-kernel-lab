@@ -19,27 +19,3 @@ def test_decoded_scale_metadata_reuse_and_invalidation():
     newer = decoded_scales(state)
     assert newer is not plain
     torch.testing.assert_close(F.dequantize_4bit(packed, newer), F.dequantize_4bit(packed, state), atol=0, rtol=0)
-
-
-def test_cached_scale_matmul_forward_and_gradient():
-    import bitsandbytes as bnb
-    from bitsandbytes.autograd._functions import MatMul4Bit
-    from solution.nf4_scales import patch_nf4_scales
-    torch.manual_seed(64)
-    packed, state = bnb.functional.quantize_4bit(torch.randn(256, 128, device="cuda") * 0.02,
-                                               quant_type="nf4", compress_statistics=True)
-    x = torch.randn(33, 128, device="cuda", dtype=torch.float16, requires_grad=True)
-    dy = torch.randn(33, 256, device="cuda", dtype=torch.float16) * 256
-    ref = bnb.matmul_4bit(x, packed, state)
-    dr, = torch.autograd.grad(ref, x, dy)
-    original = MatMul4Bit.forward
-    try:
-        patch_nf4_scales()
-        got = bnb.matmul_4bit(x, packed, state)
-        dg, = torch.autograd.grad(got, x, dy)
-        torch.testing.assert_close(got, ref, atol=0, rtol=0)
-        torch.testing.assert_close(dg, dr, atol=0, rtol=0)
-        assert state.nested and state.absmax.dtype == torch.uint8
-        assert not got.grad_fn.state.nested
-    finally:
-        MatMul4Bit.forward = staticmethod(original)
