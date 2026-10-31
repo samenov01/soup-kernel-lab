@@ -20,6 +20,8 @@ from .rmsnorm import patch_qwen2_rmsnorm
 from .compact_mlp import patch_compact_mlp
 from .chunked_head import patch_chunked_head
 from .padded_mlp import patch_padded_mlp
+from .padded_attention import patch_padded_attention
+from .rope import patch_rope
 
 _applied = False
 
@@ -35,4 +37,6 @@ def apply():
     patch_compact_mlp()
     patch_chunked_head()
     patch_padded_mlp()
+    patch_padded_attention()
+    patch_rope()
     _applied = True
