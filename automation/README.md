@@ -22,6 +22,18 @@ python automation/kaggle_control.py download --version 1 --out artifacts/kaggle_
 Проверяется, что первая GPU — T4; штатный harness использует только GPU 0.
 Полный SHA в аргументе должен быть опубликован в личном GitHub-репозитории.
 
+SDK проверяет поле `error` ответа Kaggle: отказ по лимиту сеансов теперь
+завершает команду с ошибкой, даже если CLI раньше печатал его с exit=0.
+`--timeout 900` задаёт максимальную длительность сеанса в секундах (default).
+При малой квоте короткий полный запуск без дополнительного профиля:
+
+```bash
+python automation/kaggle_control.py submit --commit FULL_GIT_SHA --repeats 1 --no-profile --timeout 600
+```
+
+`--no-profile` убирает только отдельное диагностическое профилирование;
+измеряемые base/solution, eval, unit/regression tests и admission неизменны.
+
 `status` проверяет состояние. После завершения `download` скачивает
 `kernel_results.zip` и `run_status.json`, а не тяжёлые адаптеры и кэши.
 Папка скачивания должна быть новой/пустой. Выбирайте точную версию, чтобы
