@@ -60,6 +60,28 @@ forward/backward, сохраняя исходные GEMM shapes и FP32 пара
 streamed vocabulary реализация сохранена и отдельно тестируется. Прямой
 unit-тест требует побитового совпадения с предыдущим chunked head.
 
+## Проверка варианта с бюджетом активаций
+
+`soup-kernel-memory2250-fast/1`, исходники `ae3d361ba88d47ea4676f566f7ba9d936a8bd2ab`:
+128 GPU unit-тестов и 79 регрессионных прошли. Этот вариант ещё не содержит
+исправления framework placement и также остановился до первого шага на
+`Frozen embedding unexpectedly moved from host storage`.
+**7 из 10 проверок допуска не пройдены**: завершение, работа собственных
+кернелов, их доля времени, сохранение задачи/выходов, loss-кривая, eval и
+время/память. Прошли только запрет готовых библиотек, чистота измерения и
+регрессионные тесты. Неполный запуск не подтверждает цель по памяти.
+[Исходный result, checks и логи](measurements/host_budget_placement_failure/).
+
+Исправленный вариант с полным Half head и восстановлением CPU storage
+после `_apply` — `51775b5a8d94acf96fe6e1bb480d3dcb711d1ef8`,
+`soup-kernel-memory2250/2`; результат ожидается.
+
+Параллельный исправленный кандидат оставляет до 256 MiB saved-активаций
+на GPU вместо 512 MiB; полный Half head и исправление `_apply` те же.
+Это сравнение двух политик хранения с неизменной математикой обучения;
+дополнительные CPU-пересылки могут увеличить время. Оба варианта требуют
+полного admission; более низкий бюджет сам по себе результата не гарантирует.
+
 Источники API и математических идей (код написан самостоятельно):
 [PyTorch saved_tensors_hooks](https://docs.pytorch.org/docs/2.11/autograd.html#torch.autograd.graph.saved_tensors_hooks),
 [PyTorch mm с FP32 output](https://docs.pytorch.org/docs/2.11/generated/torch.mm.html),

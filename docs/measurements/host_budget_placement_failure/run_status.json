@@ -1,0 +1,11 @@
+{
+  "commit": "ae3d361ba88d47ea4676f566f7ba9d936a8bd2ab",
+  "stage": "checks",
+  "ok": false,
+  "gpus": [
+    "Tesla T4",
+    "Tesla T4"
+  ],
+  "validation_scope": "base-and-solution",
+  "error": "checks failed (exit 1); see checks.log"
+}

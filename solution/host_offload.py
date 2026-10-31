@@ -14,7 +14,7 @@ from .streamed_head import StreamedHeadLoss, host_half_weight
 # This is storage policy inside our own autograd hooks, not a trainer setting.
 # Only activations that backward really consumes are retained; no reserve or
 # unused allocation is created. Storage aliases are counted once per forward.
-GPU_SAVED_BUDGET = 512 * 2**20
+GPU_SAVED_BUDGET = 256 * 2**20
 STREAM_VOCABULARY = False
 
 
