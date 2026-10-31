@@ -1,0 +1,40 @@
+# Цель: пик GPU строго менее 2250 MiB
+
+Новая ветка `memory2250`, основа — проверенный `a627f39`: 3731 MiB,
+71.23 с в двух повторах. Все параметры задачи, данные, порядок батчей,
+LoRA, optimizer, scheduler и флаги Soup сохраняются. Командный репозиторий
+не меняется; разработка идёт в отдельной личной ветке.
+
+## Новый кандидат
+
+- Frozen tied embedding/LM-head вес переносится на CPU перед стандартной
+  подготовкой PEFT, чтобы не создавать одновременно полные Half/Float CUDA
+  копии. Объект Parameter, его значения, FP32 dtype после PEFT и связь
+  embedding/head остаются прежними. Обучаемые LoRA-параметры остаются на CUDA.
+- Embedding выбирает исходные FP32 строки на CPU и возвращает их на исходную
+  CUDA GPU; штатный hook входного градиента остаётся на месте.
+- Head проходит весь словарь блоками 8192. На CPU хранится pinned Half-копия
+  исходных frozen весов, на GPU находится только текущий блок. Собственные
+  кернелы объединяют устойчивые CE/entropy статистики и argmax. В backward
+  учитывается настоящий GradScaler scale; частичные Half GEMM накапливаются
+  в FP32, полный входной градиент один раз округляется в Half.
+- Крупные сохранённые decoder-активации перемещаются в pinned CPU memory
+  через собственные pack/unpack hooks. Копии lossless; исходный dtype и
+  CUDA device восстанавливаются в backward. NF4 packed параметры и малые
+  тензоры не выгружаются.
+
+Встроенные `activation_offloading`, `gradient_checkpointing`, `packing`,
+`padding_free`, `use_cut_ce` не включаются. Это собственный код хранения
+тензоров и streamed head. Передача CPU/GPU и создание CPU-копий входят в
+обычный замер; фоновых процессов, другой GPU и внешних кэшей нет.
+
+Разбиение GEMM по словарю меняет порядок редукции. Нельзя заявлять
+побитовую идентичность dense backward; тестируются loss, entropy, accuracy,
+масштабированные градиенты, а затем полная кривая и adapter eval.
+Цель пока не подтверждена измерением. Возможное замедление должно пройти
+исходный допуск времени ≤110% базы, иначе кандидат будет отклонён.
+
+Источники API и математических идей (код написан самостоятельно):
+[PyTorch saved_tensors_hooks](https://docs.pytorch.org/docs/2.11/autograd.html#torch.autograd.graph.saved_tensors_hooks),
+[PyTorch mm с FP32 output](https://docs.pytorch.org/docs/2.11/generated/torch.mm.html),
+[Triton argmax с первым совпадением](https://triton-lang.org/main/python-api/generated/triton.language.argmax.html).

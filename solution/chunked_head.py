@@ -127,7 +127,8 @@ def patch_chunked_head():
     def head_supported(base):
         return (isinstance(base, modeling_qwen2.Qwen2ForCausalLM)
                 and type(base.lm_head) is torch.nn.Linear and base.lm_head.bias is None
-                and base.lm_head.weight.is_cuda and base.lm_head.weight.dtype == torch.float32
+                and (base.lm_head.weight.is_cuda or getattr(base.lm_head, "_soup_host_head", False))
+                and base.lm_head.weight.dtype == torch.float32
                 and not base.lm_head.weight.requires_grad)
 
     def model_forward(self, input_ids=None, attention_mask=None, position_ids=None,
@@ -148,7 +149,8 @@ def patch_chunked_head():
         hidden = outputs.last_hidden_state
         if hidden.dtype != torch.float32:
             raise RuntimeError("Chunked training head expects the task's fp32 final normalization")
-        loss, tokens, entropy, predictions = _ChunkedHeadLoss.apply(
+        implementation = getattr(self.lm_head, "_soup_streamed_loss", _ChunkedHeadLoss)
+        loss, tokens, entropy, predictions = implementation.apply(
             hidden, self.lm_head.weight, labels, divisor, attention_mask)
         return ChunkedOutput(loss=loss, logits=None, past_key_values=outputs.past_key_values,
             hidden_states=outputs.hidden_states, attentions=outputs.attentions,

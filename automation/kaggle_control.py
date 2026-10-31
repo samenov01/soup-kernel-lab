@@ -50,7 +50,7 @@ def download_archive(ref, out):
             raise SystemExit("No results archive found; inspect the Kaggle notebook's platform log")
 
 
-def prepare(commit, repeats=2, probe=None, only_solution=False):
+def prepare(commit, repeats=2, probe=None, only_solution=False, profile=True):
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise SystemExit("Use the full 40-character Git commit SHA")
     STAGING.mkdir(parents=True, exist_ok=True)
@@ -58,6 +58,8 @@ def prepare(commit, repeats=2, probe=None, only_solution=False):
     config = {"commit": commit, "repo_url": "https://github.com/samenov01/soup-kernel-lab.git", "repeats": repeats}
     if only_solution:
         config["only_solution"] = True
+    if not profile:
+        config["profile"] = False
     if probe:
         if not re.fullmatch(r"experiments/[a-zA-Z0-9_-]+\.py", probe):
             raise SystemExit("Probe must be a Python file directly under experiments/")
@@ -91,15 +93,25 @@ def main():
         command.add_argument("--repeats", type=int, choices=(1, 2), default=2)
         command.add_argument("--probe", help="Run an isolated diagnostic instead of training")
         command.add_argument("--only-solution", action="store_true", help="Quick harness iteration; base-dependent checks will fail")
+        command.add_argument("--no-profile", action="store_true", help="Skip the extra diagnostic profile run; scored training stays unchanged")
+        command.add_argument("--timeout", type=int, default=900, help="Maximum Kaggle session seconds (default 900)")
     sub.add_parser("status")
     command = sub.add_parser("download")
     command.add_argument("--out", required=True)
     command.add_argument("--version", type=int)
     args = parser.parse_args()
     if args.action in ("prepare", "submit"):
-        prepare(args.commit, args.repeats, args.probe, args.only_solution)
+        if not 300 <= args.timeout <= 43200:
+            raise SystemExit("Session timeout must be between 300 and 43200 seconds")
+        prepare(args.commit, args.repeats, args.probe, args.only_solution, not args.no_profile)
         if args.action == "submit":
-            call("kernels", "push", "-p", str(STAGING), "--accelerator", "NvidiaTeslaT4", "--timeout", "3600")
+            from kaggle.api.kaggle_api_extended import KaggleApi
+            api = KaggleApi()
+            api.authenticate()
+            result = api.kernels_push(str(STAGING), timeout=str(args.timeout), acc="NvidiaTeslaT4")
+            if result.error:
+                raise SystemExit("Kaggle refused the run: " + result.error)
+            print(f"Submitted {result.ref}/{result.version_number}: {result.url}")
     elif args.action == "status":
         call("kernels", "status", KERNEL)
     elif args.action == "download":
