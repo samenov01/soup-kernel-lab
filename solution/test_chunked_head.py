@@ -50,12 +50,12 @@ def test_chunk_loss_gradient_and_metrics(shape, width, vocab, scale):
     assert torch.isfinite(dg).all()
 
 
-def test_sft_metrics_and_rewind_protocol():
+def test_sft_metrics_and_rewind_protocol(tmp_path):
     from accelerate.utils.operations import convert_to_fp32
     from soup_cli.trainer.rewind_hf import row_losses, row_losses_from_token_losses
     from soup_cli.utils.stream_loss_chunk import STEP_ATTR
     from transformers import Qwen2Config, Qwen2ForCausalLM
-    from trl import SFTTrainer
+    from trl import SFTTrainer, SFTConfig
 
     original_model = Qwen2ForCausalLM.forward
     original_compute = SFTTrainer.compute_loss
@@ -81,9 +81,8 @@ def test_sft_metrics_and_rewind_protocol():
     trainer = SFTTrainer.__new__(SFTTrainer)
     trainer.model = model
     trainer.accelerator = SimpleNamespace(num_processes=1, gather_for_metrics=lambda t: t)
-    trainer.args = SimpleNamespace(use_liger_kernel=False, loss_type="nll", packing=False,
-        padding_free=False, torch_compile=False, past_index=-1, average_tokens_across_devices=False,
-        fp16=True, bf16=False)
+    trainer.args = SFTConfig(output_dir=str(tmp_path), report_to="none", fp16=True, bf16=False,
+        packing=False, padding_free=False, loss_type="nll", average_tokens_across_devices=False)
     trainer.num_virtual_tokens = 0
     trainer.aux_loss_enabled = False
     trainer.label_smoother = None

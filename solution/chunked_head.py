@@ -142,7 +142,7 @@ def patch_chunked_head():
             and self.num_virtual_tokens == 0 and not self.aux_loss_enabled
             and not self.args.use_liger_kernel and self.args.loss_type == "nll"
             and not self.args.packing and not self.args.padding_free and not self.args.torch_compile
-            and self.accelerator.num_processes == 1 and self.args.past_index < 0
+            and self.accelerator.num_processes == 1 and getattr(self.args, "past_index", -1) < 0
             and isinstance(labels, torch.Tensor) and labels.is_cuda and labels.dtype == torch.long
             and labels.ndim == 2 and labels.shape[1] > 0
             and isinstance(mask, torch.Tensor) and mask.device == labels.device and mask.shape == labels.shape

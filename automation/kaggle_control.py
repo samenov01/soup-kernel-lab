@@ -31,12 +31,14 @@ def call(*args):
     subprocess.run([cli_path(), *args], check=True)
 
 
-def prepare(commit, repeats=2, probe=None):
+def prepare(commit, repeats=2, probe=None, only_solution=False):
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise SystemExit("Use the full 40-character Git commit SHA")
     STAGING.mkdir(parents=True, exist_ok=True)
     job = (ROOT / "automation" / "kaggle_job.py").read_text(encoding="utf-8")
     config = {"commit": commit, "repo_url": "https://github.com/samenov01/soup-kernel-lab.git", "repeats": repeats}
+    if only_solution:
+        config["only_solution"] = True
     if probe:
         if not re.fullmatch(r"experiments/[a-zA-Z0-9_-]+\.py", probe):
             raise SystemExit("Probe must be a Python file directly under experiments/")
@@ -69,13 +71,14 @@ def main():
         command.add_argument("--commit", required=True)
         command.add_argument("--repeats", type=int, choices=(1, 2), default=2)
         command.add_argument("--probe", help="Run an isolated diagnostic instead of training")
+        command.add_argument("--only-solution", action="store_true", help="Quick harness iteration; base-dependent checks will fail")
     sub.add_parser("status")
     command = sub.add_parser("download")
     command.add_argument("--out", required=True)
     command.add_argument("--version", type=int)
     args = parser.parse_args()
     if args.action in ("prepare", "submit"):
-        prepare(args.commit, args.repeats, args.probe)
+        prepare(args.commit, args.repeats, args.probe, args.only_solution)
         if args.action == "submit":
             call("kernels", "push", "-p", str(STAGING), "--accelerator", "NvidiaTeslaT4", "--timeout", "3600")
     elif args.action == "status":

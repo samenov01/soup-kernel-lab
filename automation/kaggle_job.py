@@ -56,8 +56,10 @@ try:
         run("pytest_solution", [sys.executable, "-m", "pytest", "solution", "-q"], cwd=REPO)
         run("pytest_regression", [sys.executable, "-m", "pytest", "tests", "-q"],
             cwd=REPO, env=dict(os.environ, SOUP_APPLY_SOLUTION="1"))
+        only = ["--only", "solution"] if CONFIG.get("only_solution") else []
+        status["validation_scope"] = "solution-only" if only else "base-and-solution"
         run("training", [sys.executable, "harness/run_task.py", "--repeats", str(CONFIG.get("repeats", 2)),
-            "--profile", "--out", str(RESULTS)], cwd=REPO)
+            "--profile", "--out", str(RESULTS), *only], cwd=REPO)
         run("checks", [sys.executable, "harness/check_rules.py", "--result",
             str(RESULTS / "result.json")], cwd=REPO)
         run("score", [sys.executable, "harness/score.py", str(RESULTS / "result.json")], cwd=REPO)
