@@ -31,6 +31,25 @@ def call(*args):
     subprocess.run([cli_path(), *args], check=True)
 
 
+def download_archive(ref, out):
+    """Stop after the archive; avoid listing every cloned/cache/adapter file."""
+    from kaggle.api.kaggle_api_extended import KaggleApi
+    from zipfile import ZipFile
+    api = KaggleApi()
+    api.authenticate()
+    token = ""  # Non-None requests one page, rather than recursive SDK paging.
+    while True:
+        files, token = api.kernels_output(ref, str(out), file_pattern=r"^kernel_results\.zip$",
+                                          page_token=token, page_size=100, quiet=True)
+        if any(Path(p).name == "kernel_results.zip" for p in files):
+            with ZipFile(out / "kernel_results.zip") as archive:
+                (out / "run_status.json").write_bytes(archive.read("automation/run_status.json"))
+            print(f"Downloaded {ref}: {out / 'kernel_results.zip'}")
+            return
+        if not token:
+            raise SystemExit("No results archive found; inspect the Kaggle notebook's platform log")
+
+
 def prepare(commit, repeats=2, probe=None, only_solution=False):
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise SystemExit("Use the full 40-character Git commit SHA")
@@ -89,7 +108,7 @@ def main():
             raise SystemExit("Choose a new output directory to preserve previous runs")
         out.mkdir(parents=True, exist_ok=True)
         ref = KERNEL + (f"/{args.version}" if args.version else "")
-        call("kernels", "output", ref, "-p", str(out), "--file-pattern", r"^(kernel_results\.zip|run_status\.json)$")
+        download_archive(ref, out)
 
 
 if __name__ == "__main__":
