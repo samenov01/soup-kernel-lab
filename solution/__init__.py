@@ -32,6 +32,7 @@ from .recomputed_mlp import patch_recomputed_mlp
 from .nf4_scales import patch_nf4_scales
 from .residual_norm import patch_residual_norm
 from .import_metadata import import_trl_with_existing_package_map
+from .lora_autograd import patch_lora_autograd
 
 _applied = False
 
@@ -59,4 +60,5 @@ def apply():
     patch_recomputed_mlp()
     patch_nf4_scales()
     patch_residual_norm()
+    patch_lora_autograd()
     _applied = True
