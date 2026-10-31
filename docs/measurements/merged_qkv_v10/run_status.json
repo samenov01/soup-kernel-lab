@@ -1,0 +1,10 @@
+{
+  "commit": "a7d8cf2bc3825de088595182c14e6efa8a5c045b",
+  "stage": "complete",
+  "ok": true,
+  "gpus": [
+    "Tesla T4",
+    "Tesla T4"
+  ],
+  "validation_scope": "base-and-solution"
+}
