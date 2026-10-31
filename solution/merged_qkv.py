@@ -14,9 +14,10 @@ class _QKV(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, packed, state, bias, sizes):
         import bitsandbytes as bnb
-        output = bnb.matmul_4bit(x.to(torch.float16), packed, state, bias=bias).float()
+        output = bnb.matmul_4bit(x.to(torch.float16), packed, state, bias=bias).to(x.dtype)
         ctx.save_for_backward(packed)
         ctx.state, ctx.sizes = state, sizes
+        ctx.dtype = x.dtype
         return output.split(sizes, dim=-1)
 
     @staticmethod
@@ -27,7 +28,7 @@ class _QKV(torch.autograd.Function):
         state = copy(ctx.state)
         state.dtype = torch.float16
         combined = torch.cat((dq, dk, dv), -1).half()
-        return torch.matmul(combined, F.dequantize_4bit(packed, state)).float(), None, None, None, None
+        return torch.matmul(combined, F.dequantize_4bit(packed, state)).to(ctx.dtype), None, None, None, None
 
 
 def _base(module):
@@ -54,7 +55,7 @@ def patch_merged_qkv():
         layers = tuple(_base(p) for p in (self.q_proj, self.k_proj, self.v_proj))
         supported = (
             self.training and hidden_states.is_cuda and hidden_states.ndim == 3
-            and hidden_states.dtype == torch.float32 and hidden_states.shape[1] > 1
+            and hidden_states.dtype in (torch.float32, torch.float16) and hidden_states.shape[1] > 1
             and torch.is_autocast_enabled("cuda") and torch.get_autocast_dtype("cuda") == torch.float16
             and kwargs.get("past_key_values") is None
             and all(type(p) is Linear4bit and p.compute_dtype == torch.float16 and p.compute_type_is_set

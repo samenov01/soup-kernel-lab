@@ -6,9 +6,10 @@ pytestmark = pytest.mark.skipif(not torch.cuda.is_available(), reason="needs CUD
 
 
 @pytest.mark.parametrize("width,scale", [(256, 0.5), (1536, 2.)])
-def test_sparse_lora_scaling_and_amp_gradient(width, scale):
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
+def test_sparse_lora_scaling_and_amp_gradient(width, scale, dtype):
     torch.manual_seed(98)
-    base = torch.randn(2, 33, width, device="cuda", requires_grad=True)
+    base = torch.randn(2, 33, width, device="cuda", dtype=dtype, requires_grad=True)
     indices = torch.arange(0, 66, 2, device="cuda")
     inverse = torch.full((66,), -1, device="cuda", dtype=torch.long)
     inverse[indices] = torch.arange(indices.numel(), device="cuda")

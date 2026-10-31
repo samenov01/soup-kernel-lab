@@ -18,7 +18,7 @@ def rmsnorm_forward_kernel(X, W, Y, INV, WIDTH: tl.constexpr,
     row = tl.program_id(0)
     col = tl.arange(0, BLOCK)
     mask = col < WIDTH
-    x = tl.load(X + row * WIDTH + col, mask, other=0.0)
+    x = tl.load(X + row * WIDTH + col, mask, other=0.0).to(tl.float32)
     w = tl.load(W + col, mask, other=0.0)
     mean_square = tl.sum(x * x, 0) / WIDTH
     inv = tl.rsqrt(mean_square + EPS)
@@ -32,9 +32,9 @@ def rmsnorm_backward_kernel(DY, X, W, INV, DX, WIDTH: tl.constexpr,
     row = tl.program_id(0)
     col = tl.arange(0, BLOCK)
     mask = col < WIDTH
-    x = tl.load(X + row * WIDTH + col, mask, other=0.0)
+    x = tl.load(X + row * WIDTH + col, mask, other=0.0).to(tl.float32)
     w = tl.load(W + col, mask, other=0.0)
-    dy = tl.load(DY + row * WIDTH + col, mask, other=0.0)
+    dy = tl.load(DY + row * WIDTH + col, mask, other=0.0).to(tl.float32)
     inv = tl.load(INV + row)
     normalized = x * inv
     weighted_grad = dy * w

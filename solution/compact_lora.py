@@ -71,7 +71,7 @@ def patch_compact_lora():
         adapters = self.active_adapters
         supported = (
             tokens is not None and len(tokens) == 3 and tokens[0].numel() > 0
-            and self.training and x.is_cuda and x.dtype == torch.float32
+            and self.training and x.is_cuda and x.dtype in (torch.float32, torch.float16)
             and x.ndim == 3 and x.shape[:2] == tokens[1]
             and torch.is_autocast_enabled("cuda") and torch.get_autocast_dtype("cuda") == torch.float16
             and not args and not kwargs and not self.disable_adapters and not self.merged
@@ -85,8 +85,8 @@ def patch_compact_lora():
             return original(self, x, *args, **kwargs)
         self._check_forward_args(x)
         result = self.base_layer(x)
-        if result.dtype != torch.float32:
-            raise RuntimeError("Compact LoRA expects the original fp32 base output")
+        if result.dtype != x.dtype:
+            raise RuntimeError("Compact LoRA expects the original input dtype at its base output")
         adapter = adapters[0]
         # Same dropout function, shape, dtype and order as pinned PEFT.
         dropped = self.lora_dropout[adapter](x)

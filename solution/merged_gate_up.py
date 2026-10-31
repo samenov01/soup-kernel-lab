@@ -16,6 +16,7 @@ class _GateUp(torch.autograd.Function):
         output = bnb.matmul_4bit(x.to(torch.float16), packed, state)
         ctx.save_for_backward(packed)
         ctx.state = state
+        ctx.dtype = x.dtype
         return output
 
     @staticmethod
@@ -26,7 +27,7 @@ class _GateUp(torch.autograd.Function):
         state = copy(ctx.state)
         state.dtype = torch.float16
         weight = F.dequantize_4bit(packed, state)
-        return torch.matmul(grad, weight).float(), None, None
+        return torch.matmul(grad, weight).to(ctx.dtype), None, None
 
 
 def _scales(state):

@@ -49,7 +49,7 @@ def patch_compact_mlp():
     def forward(self, x):
         projections = (self.gate_proj, self.up_proj, self.down_proj)
         supported = (
-            x.is_cuda and x.dtype == torch.float32 and self.config.hidden_act == "silu"
+            x.is_cuda and x.dtype in (torch.float32, torch.float16) and self.config.hidden_act == "silu"
             and all(type(layer) is Linear4bit and layer.compute_dtype == torch.float16
                     and layer.compute_type_is_set and layer.bias is None
                     and getattr(layer.weight, "quant_state", None) is not None
@@ -65,7 +65,7 @@ def patch_compact_mlp():
             up = self.up_proj(x.to(torch.float16))
         else:
             gate, up = _gate_up(self, x)
-        return self.down_proj(_CompactSwiGLU.apply(gate, up)).float()
+        return self.down_proj(_CompactSwiGLU.apply(gate, up)).to(x.dtype)
 
     forward._soup_compact_patch = True
     modeling_qwen2.Qwen2MLP.forward = forward

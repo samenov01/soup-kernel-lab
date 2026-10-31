@@ -63,8 +63,10 @@ def patch_rope():
         return
 
     def rotary(q, k, cos, sin, unsqueeze_dim=1):
+        from .half_activations import _HALF_MODEL
         supported = (
-            unsqueeze_dim == 1 and q.is_cuda and q.numel() > 0 and q.dtype == k.dtype == torch.float32
+            unsqueeze_dim == 1 and q.is_cuda and q.numel() > 0 and q.dtype == k.dtype
+            and (q.dtype == torch.float32 or q.dtype == torch.float16 and _HALF_MODEL.get())
             and q.ndim == k.ndim == 4 and q.shape[0] == k.shape[0]
             and q.shape[2:] == k.shape[2:] and q.shape[-1] % 2 == 0
             and q.stride(-1) == k.stride(-1) == 1

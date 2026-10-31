@@ -55,7 +55,7 @@ def patch_padded_mlp():
         tokens = _TOKENS.get()
         supported = (
             tokens is not None and x.ndim == 3 and x.shape[:2] == tokens[1]
-            and x.dtype == torch.float32
+            and x.dtype in (torch.float32, torch.float16)
             and all(type(layer) is Linear4bit and layer.compute_dtype == torch.float16
                     and layer.compute_type_is_set and layer.bias is None
                     and not any(p.requires_grad for p in layer.parameters())
