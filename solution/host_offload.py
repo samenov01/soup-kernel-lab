@@ -14,8 +14,8 @@ from .streamed_head import StreamedHeadLoss, host_half_weight
 # This is storage policy inside our own autograd hooks, not a trainer setting.
 # Only activations that backward really consumes are retained; no reserve or
 # unused allocation is created. Storage aliases are counted once per forward.
-GPU_SAVED_BUDGET = 256 * 2**20
-STREAM_VOCABULARY = False
+GPU_SAVED_BUDGET = 64 * 2**20
+STREAM_VOCABULARY = True
 
 
 class _HostBackedFullHead(torch.autograd.Function):
@@ -86,6 +86,10 @@ def offload_embedding(model):
     head._soup_host_head = True
     head._soup_streamed_loss = StreamedHeadLoss if STREAM_VOCABULARY else _HostBackedFullHead
     model.model._soup_saved_offload = True
+    if not weight.requires_grad:
+        from .host_storage import keep_weight_on_host
+        keep_weight_on_host(embedding)
+        keep_weight_on_host(head)
 
 
 def patch_host_offload():
@@ -103,7 +107,8 @@ def patch_host_offload():
     def prepare(model, *args, **kwargs):
         supported = (type(model) is Qwen2ForCausalLM and getattr(model, "is_loaded_in_4bit", False)
                      and model.model.embed_tokens.weight is model.lm_head.weight
-                     and model.model.embed_tokens.weight.is_cuda)
+                     and (model.model.embed_tokens.weight.is_cuda
+                          or getattr(model, "_soup_cpu_embedding_load", False)))
         if supported:
             # Move before PEFT widens this frozen parameter to FP32, avoiding
             # a simultaneous full Half + Float CUDA copy at model setup.
@@ -111,6 +116,12 @@ def patch_host_offload():
         result = original_prepare(model, *args, **kwargs)
         if supported and (result.lm_head.weight.dtype != torch.float32 or result.lm_head.weight.requires_grad):
             raise RuntimeError("PEFT frozen head dtype contract changed")
+        if supported:
+            offload_embedding(result)
+            if getattr(model, "_soup_cpu_embedding_load", False):
+                from .host_mlp import offload_mlp
+                for layer in result.model.layers:
+                    offload_mlp(layer.mlp)
         return result
 
     def embedding(self, ids):

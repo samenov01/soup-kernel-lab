@@ -31,6 +31,7 @@ from .nf4_backward import patch_nf4_backward
 from .recomputed_mlp import patch_recomputed_mlp
 from .nf4_scales import patch_nf4_scales
 from .host_offload import patch_host_offload
+from .host_mlp import patch_host_mlp_loading
 
 _applied = False
 
@@ -57,4 +58,5 @@ def apply():
     patch_recomputed_mlp()
     patch_nf4_scales()
     patch_host_offload()
+    patch_host_mlp_loading()
     _applied = True

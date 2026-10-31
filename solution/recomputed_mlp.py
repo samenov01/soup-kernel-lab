@@ -13,12 +13,16 @@ from .swiglu import BLOCK, example_swiglu_fwd_kernel, example_swiglu_bwd_kernel
 from .merged_gate_up import packed_gate_up
 from .half_activations import _HALF_MODEL
 from .projection_io import _gather, _scatter
+from .host_storage import device_operands
 
 
-def _decode(packed, state):
+def _decode(packed, state, device=None):
     from bitsandbytes.functional import dequantize_4bit
     from .nf4_scales import decoded_scales
-    state = copy(decoded_scales(state))
+    state = decoded_scales(state)
+    if device is not None:
+        packed, state = device_operands(packed, state, device)
+    state = copy(state)
     state.dtype = torch.float16
     return dequantize_4bit(packed, state)
 
@@ -30,13 +34,17 @@ class _RecomputedMLP(torch.autograd.Function):
         ctx.nargs = len(ctx.needs_input_grad)
         ctx.shape = x.shape
         x = _gather(x, indices, torch.float16) if indices is not None else x.reshape(-1, x.shape[-1])
-        merged = bnb.matmul_4bit(x, packed, state)
+        resident, resident_state = device_operands(packed, state, x.device)
+        merged = bnb.matmul_4bit(x, resident, resident_state)
+        del resident, resident_state
         gate, up = (part.contiguous() for part in merged.chunk(2, -1))
         del merged
         activation = torch.empty_like(gate)
         example_swiglu_fwd_kernel[(triton.cdiv(gate.numel(), BLOCK),)](
             gate, up, activation, gate.numel(), BLOCK=BLOCK)
-        out = bnb.matmul_4bit(activation, down, down_state)
+        del gate, up
+        resident, resident_state = device_operands(down, down_state, x.device)
+        out = bnb.matmul_4bit(activation, resident, resident_state)
         ctx.save_for_backward(x, packed, down, indices, inverse)
         ctx.states = state, down_state
         return (_scatter(out, inverse, ctx.shape, x.dtype) if indices is not None
@@ -52,8 +60,9 @@ class _RecomputedMLP(torch.autograd.Function):
                 else grad.reshape(-1, grad.shape[-1]))
         # Explicit half operands also preserve the configured AMP boundaries
         # when autograd executes outside the forward's autocast context.
-        da = torch.matmul(grad, _decode(down, down_state))
-        merged = bnb.matmul_4bit(x, packed, state)
+        da = torch.matmul(grad, _decode(down, down_state, grad.device))
+        resident, resident_state = device_operands(packed, state, x.device)
+        merged = bnb.matmul_4bit(x, resident, resident_state)
         gate, up = (part.contiguous() for part in merged.chunk(2, -1))
         del merged
         dgate, dup = torch.empty_like(gate), torch.empty_like(up)
@@ -62,7 +71,7 @@ class _RecomputedMLP(torch.autograd.Function):
         del da, gate, up
         combined = torch.cat((dgate, dup), -1)
         del dgate, dup
-        dx = torch.matmul(combined, _decode(packed, state))
+        dx = torch.matmul(combined, _decode(resident, resident_state))
         dx = (_scatter(dx, inverse, ctx.shape, x.dtype) if indices is not None else dx.view(ctx.shape))
         return (dx, None, None, None, None, None, None)[:ctx.nargs]
 
@@ -103,7 +112,8 @@ def patch_recomputed_mlp():
             else:
                 inverse = io[1]
         return _RecomputedMLP.apply(x, cached[1], cached[2], self.down_proj.weight,
-                                   self.down_proj.weight.quant_state, indices, inverse)
+                                   getattr(self, "_soup_host_down_state", self.down_proj.weight.quant_state),
+                                   indices, inverse)
 
     forward._soup_recomputed_mlp = True
     Qwen2MLP.forward = forward
