@@ -26,6 +26,7 @@ from .merged_gate_up import patch_merged_gate_up
 from .merged_qkv import patch_merged_qkv
 from .compact_lora import patch_compact_lora
 from .half_activations import patch_half_activations
+from .unpadded_sdpa import patch_unpadded_sdpa
 
 _applied = False
 
@@ -47,4 +48,5 @@ def apply():
     patch_merged_qkv()
     patch_compact_lora()
     patch_half_activations()
+    patch_unpadded_sdpa()
     _applied = True
