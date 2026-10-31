@@ -16,7 +16,6 @@ The rules in short (the README and the task statement have the full ones):
 from .swiglu import patch_qwen2_mlp
 from .vocab import patch_vocab_reductions
 from .nf4 import patch_nf4_dequantization
-from .nf4_backward import patch_nf4_backward
 from .rmsnorm import patch_qwen2_rmsnorm
 from .compact_mlp import patch_compact_mlp
 from .chunked_head import patch_chunked_head
@@ -32,7 +31,6 @@ def apply():
     patch_qwen2_mlp()  # the example: works out of the box, does not count as your own kernel
     patch_vocab_reductions()
     patch_nf4_dequantization()
-    patch_nf4_backward()
     patch_qwen2_rmsnorm()
     patch_compact_mlp()
     patch_chunked_head()
