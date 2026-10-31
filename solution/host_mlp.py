@@ -1,7 +1,7 @@
 """Store frozen MLP NF4 bytes on CPU; compute forward/backward on CUDA."""
 
 from contextlib import contextmanager
-from copy import copy
+from dataclasses import replace
 import torch
 from .host_storage import pinned_copy, copy_quant_state, keep_weight_on_host
 from .merged_gate_up import packed_gate_up, share_packed_storage, _signature
@@ -79,9 +79,9 @@ def host_load_config(model, config):
     device = torch.device("cuda", target) if isinstance(target, int) else torch.device(target)
     if device.type != "cuda":
         return None
-    local = copy(config)
-    local.device_map = dict(mapping)
-    local.device_map.update({"model.embed_tokens": "cpu", "lm_head": "cpu"})
+    # Transformers LoadStateDictConfig is frozen. Construct a new instance
+    # rather than assigning fields on a shallow copy of that frozen object.
+    local = replace(config, device_map={**mapping, "model.embed_tokens": "cpu", "lm_head": "cpu"})
     return local, device
 
 

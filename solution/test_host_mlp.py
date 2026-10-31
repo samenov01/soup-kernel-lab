@@ -63,13 +63,18 @@ def test_host_mlp_exact_output_scaled_backward_and_placement(width, intermediate
 
 def test_host_load_config_preserves_original_config_and_quantization():
     from transformers import Qwen2Config, BitsAndBytesConfig
+    from transformers.modeling_utils import LoadStateDictConfig
     from transformers.quantizers.quantizer_bnb_4bit import Bnb4BitHfQuantizer
     from solution.host_mlp import host_load_config
     quantizer = Bnb4BitHfQuantizer(BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4"))
-    config = SimpleNamespace(hf_quantizer=quantizer, device_map={"": 0})
+    config = LoadStateDictConfig(hf_quantizer=quantizer, device_map={"": 0},
+                                dtype=torch.float16, offload_buffers=False)
     model = SimpleNamespace(config=Qwen2Config(tie_word_embeddings=True))
     local, device = host_load_config(model, config)
     assert config.device_map == {"": 0}
+    assert config.__dataclass_params__.frozen
+    assert local is not config and local.device_map is not config.device_map
+    assert local.dtype == config.dtype and local.offload_buffers == config.offload_buffers
     assert local.hf_quantizer is quantizer and device == torch.device("cuda:0")
     assert local.device_map == {"": 0, "model.embed_tokens": "cpu", "lm_head": "cpu"}
 
