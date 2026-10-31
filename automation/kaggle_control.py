@@ -31,12 +31,16 @@ def call(*args):
     subprocess.run([cli_path(), *args], check=True)
 
 
-def prepare(commit, repeats=2):
+def prepare(commit, repeats=2, probe=None):
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise SystemExit("Use the full 40-character Git commit SHA")
     STAGING.mkdir(parents=True, exist_ok=True)
     job = (ROOT / "automation" / "kaggle_job.py").read_text(encoding="utf-8")
     config = {"commit": commit, "repo_url": "https://github.com/samenov01/soup-kernel-lab.git", "repeats": repeats}
+    if probe:
+        if not re.fullmatch(r"experiments/[a-zA-Z0-9_-]+\.py", probe):
+            raise SystemExit("Probe must be a Python file directly under experiments/")
+        config["probe"] = probe
     # Embed config into the submitted notebook: no external input attachment needed.
     job = job.replace('CONFIG = json.loads(Path(__file__).with_name("run-config.json").read_text())',
                       "CONFIG = " + repr(config))
@@ -64,13 +68,14 @@ def main():
         command = sub.add_parser(name)
         command.add_argument("--commit", required=True)
         command.add_argument("--repeats", type=int, choices=(1, 2), default=2)
+        command.add_argument("--probe", help="Run an isolated diagnostic instead of training")
     sub.add_parser("status")
     command = sub.add_parser("download")
     command.add_argument("--out", required=True)
     command.add_argument("--version", type=int)
     args = parser.parse_args()
     if args.action in ("prepare", "submit"):
-        prepare(args.commit, args.repeats)
+        prepare(args.commit, args.repeats, args.probe)
         if args.action == "submit":
             call("kernels", "push", "-p", str(STAGING), "--accelerator", "NvidiaTeslaT4", "--timeout", "3600")
     elif args.action == "status":

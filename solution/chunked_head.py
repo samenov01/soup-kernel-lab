@@ -115,6 +115,8 @@ def patch_chunked_head():
                 labels=labels, use_cache=use_cache, logits_to_keep=logits_to_keep, **kwargs)
         if not head_supported(self) or labels is None or logits_to_keep != 0:
             raise RuntimeError("Chunked training head contract changed")
+        if not torch.is_autocast_enabled("cuda") or torch.get_autocast_dtype("cuda") != torch.float16:
+            raise RuntimeError("Chunked head requires the model's configured fp16 autocast")
         divisor = kwargs.pop("num_items_in_batch", None)
         outputs = self.model(input_ids=input_ids, attention_mask=attention_mask,
             position_ids=position_ids, past_key_values=past_key_values,
@@ -133,7 +135,9 @@ def patch_chunked_head():
         mask = inputs.get("attention_mask")
         supported = (
             head_supported(base) and model.training and self.model.training
-            and torch.is_autocast_enabled("cuda") and torch.get_autocast_dtype("cuda") == torch.float16
+            # Accelerate enters autocast inside the model's wrapped forward,
+            # after this trainer method. Validate it there, not before the call.
+            and self.args.fp16 and not self.args.bf16
             and self.label_smoother is None and self.compute_loss_func is None
             and self.num_virtual_tokens == 0 and not self.aux_loss_enabled
             and not self.args.use_liger_kernel and self.args.loss_type == "nll"

@@ -45,15 +45,22 @@ try:
     run("checkout", ["git", "checkout", "-q", CONFIG["commit"]], cwd=REPO)
     actual = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True).strip()
     assert actual == CONFIG["commit"], (actual, CONFIG["commit"])
-    run("data", [sys.executable, "task/prepare_data.py"], cwd=REPO)
-    run("pytest_solution", [sys.executable, "-m", "pytest", "solution", "-q"], cwd=REPO)
-    run("pytest_regression", [sys.executable, "-m", "pytest", "tests", "-q"],
-        cwd=REPO, env=dict(os.environ, SOUP_APPLY_SOLUTION="1"))
-    run("training", [sys.executable, "harness/run_task.py", "--repeats", str(CONFIG.get("repeats", 2)),
-        "--profile", "--out", str(RESULTS)], cwd=REPO)
-    run("checks", [sys.executable, "harness/check_rules.py", "--result",
-        str(RESULTS / "result.json")], cwd=REPO)
-    run("score", [sys.executable, "harness/score.py", str(RESULTS / "result.json")], cwd=REPO)
+    if CONFIG.get("probe"):
+        status["diagnostic_only"] = True
+        run("probe", [sys.executable, CONFIG["probe"]], cwd=REPO,
+            env=dict(os.environ, PYTHONPATH=str(REPO), CUDA_VISIBLE_DEVICES="0"))
+        import shutil
+        shutil.copyfile(REPO / "nf4_gemm_probe.json", WORK / "probe_results.json")
+    else:
+        run("data", [sys.executable, "task/prepare_data.py"], cwd=REPO)
+        run("pytest_solution", [sys.executable, "-m", "pytest", "solution", "-q"], cwd=REPO)
+        run("pytest_regression", [sys.executable, "-m", "pytest", "tests", "-q"],
+            cwd=REPO, env=dict(os.environ, SOUP_APPLY_SOLUTION="1"))
+        run("training", [sys.executable, "harness/run_task.py", "--repeats", str(CONFIG.get("repeats", 2)),
+            "--profile", "--out", str(RESULTS)], cwd=REPO)
+        run("checks", [sys.executable, "harness/check_rules.py", "--result",
+            str(RESULTS / "result.json")], cwd=REPO)
+        run("score", [sys.executable, "harness/score.py", str(RESULTS / "result.json")], cwd=REPO)
     status.update(ok=True, stage="complete")
 except Exception as exc:
     status["error"] = str(exc)
@@ -64,6 +71,8 @@ finally:
     archive = WORK / "kernel_results.zip"
     with ZipFile(archive, "w", ZIP_DEFLATED) as output:
         output.write(WORK / "run_status.json", "automation/run_status.json")
+        if (WORK / "probe_results.json").exists():
+            output.write(WORK / "probe_results.json", "automation/probe_results.json")
         for file in LOGS.glob("*.log"):
             output.write(file, "automation/" + file.name)
         if RESULTS.exists():

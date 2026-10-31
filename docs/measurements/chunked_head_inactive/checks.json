@@ -1,0 +1,57 @@
+{
+  "result_sha256": "8c94aa6989977b2347c7bbc9b350f7affca5d87d5e576ab1b0be6ed43f3a4ef1",
+  "solution_sha256": "fef8a6d315274760a23865be383050bedb20f368bcf27eafc2420d4e25c1141d",
+  "checks": [
+    {
+      "check": "1. every base and solution run finished",
+      "ok": true,
+      "detail": "1 base and 1 solution runs of 1 each"
+    },
+    {
+      "check": "2. no ready-made kernel libraries",
+      "ok": true,
+      "detail": "loaded: none; imported in solution/: none; packages changed during the run: none"
+    },
+    {
+      "check": "3. own @triton.jit kernels in solution/ run in training",
+      "ok": true,
+      "detail": "nf4_unpack_scale_kernel (solution/nf4.py), rmsnorm_backward_kernel (solution/rmsnorm.py), rmsnorm_forward_kernel (solution/rmsnorm.py), vocab_ce_backward_kernel (solution/vocab.py), vocab_ce_finish_kernel (solution/vocab.py), vocab_entropy_finish_kernel (solution/vocab.py), vocab_partial_kernel (solution/vocab.py); the example's kernels do not count, under any name: example_swiglu_fwd_kernel, example_swiglu_bwd_kernel"
+    },
+    {
+      "check": "4. own kernels together take >= 5% of the training time",
+      "ok": true,
+      "detail": "8.7% of the training time (lowest of 1 runs, steps 3+)"
+    },
+    {
+      "check": "5. same task and Soup outputs (steps, adapter, settings, tokens, metrics, rewind)",
+      "ok": true,
+      "detail": "identical within tolerance"
+    },
+    {
+      "check": "6. loss curve follows the base",
+      "ok": true,
+      "detail": "solution_1: first step 0.00%, mean of all steps 0.01% (max 1% and 3%)"
+    },
+    {
+      "check": "7. quality: eval loss at most 0.5% above the base",
+      "ok": true,
+      "detail": "+0.000%"
+    },
+    {
+      "check": "8. not worse than the base on time or memory (10% margin)",
+      "ok": true,
+      "detail": "time x0.862, memory x0.721 of the base"
+    },
+    {
+      "check": "9. clean measurement (a T4, idle GPUs, one GPU, harness allocator, peaks agree)",
+      "ok": true,
+      "detail": "clean"
+    },
+    {
+      "check": "10. Soup regression tests with your patches",
+      "ok": true,
+      "detail": "79 passed, 14 warnings in 0.34s"
+    }
+  ],
+  "notes": []
+}

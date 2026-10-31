@@ -73,14 +73,17 @@ def test_sft_metrics_and_rewind_protocol():
             return self.model
 
         def forward(self, **kwargs):
-            return convert_to_fp32(self.model(**kwargs))
+            # Match Accelerate: trainer.compute_loss itself is outside AMP.
+            with torch.autocast("cuda", dtype=torch.float16):
+                return convert_to_fp32(self.model(**kwargs))
 
     model = Wrapper(base)
     trainer = SFTTrainer.__new__(SFTTrainer)
     trainer.model = model
     trainer.accelerator = SimpleNamespace(num_processes=1, gather_for_metrics=lambda t: t)
     trainer.args = SimpleNamespace(use_liger_kernel=False, loss_type="nll", packing=False,
-        padding_free=False, torch_compile=False, past_index=-1, average_tokens_across_devices=False)
+        padding_free=False, torch_compile=False, past_index=-1, average_tokens_across_devices=False,
+        fp16=True, bf16=False)
     trainer.num_virtual_tokens = 0
     trainer.aux_loss_enabled = False
     trainer.label_smoother = None
@@ -96,8 +99,7 @@ def test_sft_metrics_and_rewind_protocol():
     count = (labels[:, 1:] != -100).sum()
     inputs = {"inputs_embeds": x, "labels": labels, "attention_mask": mask}
     try:
-        with torch.autocast("cuda", dtype=torch.float16):
-            reference, ref_outputs = original_compute(trainer, model, dict(inputs), True, count)
+        reference, ref_outputs = original_compute(trainer, model, dict(inputs), True, count)
         dr, = torch.autograd.grad(reference, x)
         expected_metrics = dict(trainer._metrics["train"])
         expected_rows = row_losses(ref_outputs.logits, labels)
@@ -107,8 +109,8 @@ def test_sft_metrics_and_rewind_protocol():
         first = SFTTrainer.compute_loss
         patch_chunked_head()
         assert SFTTrainer.compute_loss is first
-        with torch.autocast("cuda", dtype=torch.float16):
-            actual, outputs = trainer.compute_loss(model, dict(inputs), True, count)
+        assert not torch.is_autocast_enabled("cuda")
+        actual, outputs = trainer.compute_loss(model, dict(inputs), True, count)
         dg, = torch.autograd.grad(actual, x)
         assert outputs.logits is None
         torch.testing.assert_close(actual, reference, rtol=1e-4, atol=3e-5)
