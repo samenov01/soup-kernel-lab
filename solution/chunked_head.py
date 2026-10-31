@@ -22,15 +22,27 @@ CHUNK = 256
 
 class _ChunkedHeadLoss(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, hidden, weight, labels, divisor):
+    def forward(ctx, hidden, weight, labels, divisor, attention_mask):
         batch, length, width = hidden.shape
         vocab = weight.shape[0]
         # These are precisely the operand conversions of the original autocast linear.
-        xhalf = hidden.reshape(-1, width).to(torch.float16)
-        whalf = weight.to(torch.float16)
         target = F.pad(labels, (0, 1), value=-100)[:, 1:].contiguous().view(-1)
         count = (target != -100).sum() if divisor is None else divisor
         denominator = torch.as_tensor(count, device=hidden.device, dtype=torch.float32)
+        full_rows = batch * length
+        if attention_mask is None:
+            selected = torch.arange(full_rows, device=hidden.device)
+        else:
+            # Entropy needs attention tokens, CE/accuracy need shifted-label
+            # positions. The union also handles a left-padding boundary label.
+            needed = attention_mask.reshape(-1).ne(0) | target.ne(-100)
+            selected = needed.nonzero(as_tuple=False).flatten()
+        flat_hidden = hidden.reshape(-1, width)
+        if selected.numel() != full_rows:
+            flat_hidden = flat_hidden.index_select(0, selected)
+        xhalf = flat_hidden.to(torch.float16)
+        whalf = weight.to(torch.float16)
+        target = target.index_select(0, selected)
         rows = xhalf.shape[0]
         losses = torch.empty(rows, device=hidden.device, dtype=torch.float32)
         entropy = torch.empty_like(losses)
@@ -49,8 +61,12 @@ class _ChunkedHeadLoss(torch.autograd.Function):
                     triton.next_power_of_2(parts), num_warps=4)
                 predictions[start:end] = logits.argmax(dim=-1)
                 del logits
-        ctx.save_for_backward(xhalf, whalf, target, norm, denominator)
+        ctx.save_for_backward(xhalf, whalf, target, norm, denominator, selected)
         ctx.shape = hidden.shape
+        if rows != full_rows:
+            losses = torch.zeros(full_rows, device=hidden.device, dtype=torch.float32).index_copy_(0, selected, losses)
+            entropy = torch.zeros(full_rows, device=hidden.device, dtype=torch.float32).index_copy_(0, selected, entropy)
+            predictions = torch.zeros(full_rows, device=hidden.device, dtype=torch.long).index_copy_(0, selected, predictions)
         tokens = losses.view(batch, length)
         entropy = entropy.view(batch, length)
         predictions = predictions.view(batch, length)
@@ -60,10 +76,19 @@ class _ChunkedHeadLoss(torch.autograd.Function):
     @staticmethod
     @once_differentiable
     def backward(ctx, grad_loss, _grad_tokens, _grad_entropy, _grad_predictions):
-        xhalf, whalf, target, norm, denominator = ctx.saved_tensors
-        rows, width = xhalf.shape
+        xhalf, whalf, target, norm, denominator, selected = ctx.saved_tensors
+        width = xhalf.shape[1]
         vocab = whalf.shape[0]
-        dx = torch.empty((rows, width), device=xhalf.device, dtype=torch.float32)
+        full_rows = ctx.shape[0] * ctx.shape[1]
+        dx = torch.zeros((full_rows, width), device=xhalf.device, dtype=torch.float32)
+        # Ignored CE rows have an exactly zero gradient. Recompute only the
+        # supervised rows, preserving their original positions in the result.
+        supervised = target.ne(-100).nonzero(as_tuple=False).flatten()
+        xhalf = xhalf.index_select(0, supervised)
+        target = target.index_select(0, supervised)
+        norm = norm.index_select(0, supervised)
+        positions = selected.index_select(0, supervised)
+        rows = xhalf.shape[0]
         # GradScaler's actual upstream scale is applied BEFORE the fp16 cast,
         # matching the dense loss -> cast -> linear backward sequence.
         scale = grad_loss.float() / denominator
@@ -72,14 +97,13 @@ class _ChunkedHeadLoss(torch.autograd.Function):
                 end = min(start + CHUNK, rows)
                 logits = F.linear(xhalf[start:end], whalf).float()
                 dlogits = torch.empty((end - start, vocab), device=xhalf.device, dtype=torch.float16)
-                upstream = scale.expand(end - start).contiguous()
                 vocab_ce_backward_kernel[(end - start, triton.cdiv(vocab, TILE))](
-                    logits, target[start:end], norm[start:end], upstream, dlogits,
-                    vocab, vocab, -100, TILE, num_warps=4)
+                    logits, target[start:end], norm[start:end], scale, dlogits,
+                    vocab, vocab, -100, TILE, DLOSS_STRIDE=0, num_warps=4)
                 del logits
-                dx[start:end] = torch.matmul(dlogits, whalf)
+                dx.index_copy_(0, positions[start:end], torch.matmul(dlogits, whalf).float())
                 del dlogits
-        return dx.view(ctx.shape), None, None, None
+        return dx.view(ctx.shape), None, None, None, None
 
 
 def patch_chunked_head():
@@ -124,7 +148,8 @@ def patch_chunked_head():
         hidden = outputs.last_hidden_state
         if hidden.dtype != torch.float32:
             raise RuntimeError("Chunked training head expects the task's fp32 final normalization")
-        loss, tokens, entropy, predictions = _ChunkedHeadLoss.apply(hidden, self.lm_head.weight, labels, divisor)
+        loss, tokens, entropy, predictions = _ChunkedHeadLoss.apply(
+            hidden, self.lm_head.weight, labels, divisor, attention_mask)
         return ChunkedOutput(loss=loss, logits=None, past_key_values=outputs.past_key_values,
             hidden_states=outputs.hidden_states, attentions=outputs.attentions,
             token_loss=tokens, token_entropy=entropy, token_predictions=predictions)
@@ -155,7 +180,7 @@ def patch_chunked_head():
                                     num_items_in_batch=num_items_in_batch)
         inputs.pop("_prediction_loss_only", None)
         inputs["use_cache"] = False
-        active = _ACTIVE.set(True)
+        active = _ACTIVE.set(SimpleNamespace(labels=labels, attention_mask=mask))
         try:
             # Keep HF's original loss normalization and scaling logic intact.
             loss, outputs = Trainer.compute_loss(self, model, inputs, return_outputs=True,

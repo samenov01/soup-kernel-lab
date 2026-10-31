@@ -38,7 +38,7 @@ def test_chunk_loss_gradient_and_metrics(shape, width, vocab, scale):
 
     with torch.autocast("cuda", dtype=torch.float16):
         with torch.autograd.graph.saved_tensors_hooks(pack, lambda t: t):
-            actual, tokens, entropy, predictions = _ChunkedHeadLoss.apply(x, w, labels, denominator)
+            actual, tokens, entropy, predictions = _ChunkedHeadLoss.apply(x, w, labels, denominator, None)
     dg, = torch.autograd.grad(actual * scale, x)
     torch.testing.assert_close(actual, reference, atol=3e-5, rtol=3e-5)
     torch.testing.assert_close(tokens, token_loss, atol=3e-3, rtol=3e-4)
@@ -126,3 +126,48 @@ def test_sft_metrics_and_rewind_protocol(tmp_path):
     finally:
         Qwen2ForCausalLM.forward = original_model
         SFTTrainer.compute_loss = original_compute
+
+
+@pytest.mark.parametrize("side", ["left", "right"])
+def test_head_padding_and_supervised_boundary(side):
+    torch.manual_seed(72)
+    x = torch.randn(2, 17, 64, device="cuda", requires_grad=True)
+    w = torch.randn(257, 64, device="cuda") * 0.02
+    labels = torch.randint(257, (2, 17), device="cuda")
+    mask = torch.ones_like(labels)
+    if side == "left":
+        mask[0, :5] = 0
+        labels[0, :5] = -100
+        # The query at padding position 4 predicts the first valid label.
+    else:
+        mask[0, 9:] = 0
+        labels[0, 9:] = -100
+    shifted = F.pad(labels, (0, 1), value=-100)[:, 1:].contiguous()
+    with torch.autocast("cuda", dtype=torch.float16):
+        logits = F.linear(x, w).float()
+        tokens_ref = F.cross_entropy(logits.flatten(0, 1), shifted.flatten(), reduction="none").view_as(labels)
+        ref = tokens_ref.sum() / (shifted != -100).sum()
+        logps = F.log_softmax(logits, -1)
+        entropy_ref = -(logps.exp() * logps).sum(-1)
+        actual, tokens, entropy, predictions = _ChunkedHeadLoss.apply(x, w, labels, None, mask)
+    dr, = torch.autograd.grad(ref * 65536, x)
+    dg, = torch.autograd.grad(actual * 65536, x)
+    torch.testing.assert_close(actual, ref, rtol=3e-5, atol=3e-5)
+    torch.testing.assert_close(tokens, tokens_ref, rtol=3e-4, atol=3e-3)
+    torch.testing.assert_close(entropy[mask.bool()], entropy_ref[mask.bool()], rtol=3e-4, atol=3e-3)
+    needed = mask.bool() | shifted.ne(-100)
+    torch.testing.assert_close(predictions[needed], logits.argmax(-1)[needed], atol=0, rtol=0)
+    torch.testing.assert_close(dg / 65536, dr / 65536, rtol=3e-3, atol=3e-6)
+    assert (dg[shifted == -100] == 0).all()
+
+
+def test_head_all_ignored_zero_gradient():
+    x = torch.randn(2, 7, 64, device="cuda", requires_grad=True)
+    w = torch.randn(257, 64, device="cuda") * 0.02
+    labels = torch.full((2, 7), -100, device="cuda", dtype=torch.long)
+    with torch.autocast("cuda", dtype=torch.float16):
+        loss, tokens, entropy, _ = _ChunkedHeadLoss.apply(x, w, labels, None, torch.ones_like(labels))
+    grad, = torch.autograd.grad(loss, x)
+    assert torch.isnan(loss)
+    assert (tokens == 0).all() and (grad == 0).all()
+    assert torch.isfinite(entropy).all()

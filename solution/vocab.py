@@ -59,14 +59,14 @@ def vocab_ce_finish_kernel(X, Y, M, S, NORM, LOSS, V: tl.constexpr,
 @triton.jit
 def vocab_ce_backward_kernel(X, Y, NORM, DLOSS, DX, V: tl.constexpr,
                              STRIDE: tl.constexpr, IGNORE: tl.constexpr,
-                             BLOCK: tl.constexpr):
+                             BLOCK: tl.constexpr, DLOSS_STRIDE: tl.constexpr = 1):
     row = tl.program_id(0)
     col = tl.program_id(1) * BLOCK + tl.arange(0, BLOCK)
     label = tl.load(Y + row)
     x = tl.load(X + row * STRIDE + col, col < V, other=-float("inf"))
     maximum = tl.load(NORM + 2 * row)
     log_sum = tl.load(NORM + 2 * row + 1)
-    upstream = tl.load(DLOSS + row)
+    upstream = tl.load(DLOSS + row * DLOSS_STRIDE)
     grad = (tl.exp((x - maximum) - log_sum) - (col == label).to(tl.float32)) * upstream
     tl.store(DX + row * V + col, tl.where(label != IGNORE, grad, 0.0), col < V)
 

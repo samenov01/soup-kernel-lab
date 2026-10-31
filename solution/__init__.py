@@ -19,6 +19,7 @@ from .nf4 import patch_nf4_dequantization
 from .rmsnorm import patch_qwen2_rmsnorm
 from .compact_mlp import patch_compact_mlp
 from .chunked_head import patch_chunked_head
+from .padded_mlp import patch_padded_mlp
 
 _applied = False
 
@@ -33,4 +34,5 @@ def apply():
     patch_qwen2_rmsnorm()
     patch_compact_mlp()
     patch_chunked_head()
+    patch_padded_mlp()
     _applied = True
